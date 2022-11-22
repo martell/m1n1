@@ -72,7 +72,7 @@ class ANE:
 
     def iowrite(self, iova, buf):
         self.dart.iowrite(0, iova & 0xFFFFFFFF, buf)
-        return len(buf)
+        return
 
     def syncttbr(self):
         """
@@ -86,3 +86,9 @@ class ANE:
         for instance in range(3):
             assert(self.dart_regs_all[instance].TTBR[0, 0].val == ttbr0_addr)
         return ttbr0_addr
+    
+    def get_dma_perf_stats(self):
+        dma_rw = self.perf_regs.DMA_RW.val
+        dma_r = self.perf_regs.DMA_R.val
+        dma_w = dma_rw - dma_r
+        return (dma_r, dma_w, dma_rw)

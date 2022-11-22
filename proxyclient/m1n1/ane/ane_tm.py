@@ -34,8 +34,8 @@ class TaskManager:
         return
 
     def enqueue_tq(self, task, queue_id=4):
-        if not ((queue_id >= 0) and (queue_id < self.TQ_HW_COUNT)):
-            raise ValueError('8 hw queues available; 0 <= queue_id <= 7')
+        if not ((queue_id >= 1) and (queue_id < self.TQ_HW_COUNT)):
+            raise ValueError('1 <= queue_id <= 7')
         
         if not (self.tq.PRTY[queue_id].val == self.tq_prty[queue_id]):
             raise ValueError('invalid priority param setup for tq %d' % queue_id)

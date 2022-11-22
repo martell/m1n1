@@ -6,8 +6,6 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from m1n1.setup import *
 from m1n1.shell import run_shell
 
-import struct
-from copy import deepcopy
 import numpy as np
 
 from m1n1.ane import ANE
@@ -129,7 +127,16 @@ def push2hw(ane, td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
 
 # ---------------------------------------------
 
+def get_dma_perf_stats():
+    dma_rw = ane.perf_regs.DMA_RW.val
+    dma_r = ane.perf_regs.DMA_R.val
+    dma_w = dma_rw_prev - dma_r_prev
+    return (dma_r, dma_w, dma_rw)
+
+
 def main(input_size, alpha, beta):
+    (dma_r1, dma_w1, dma_rw1) = get_dma_perf_stats()
+
     input_dim, weight_dim, output_dim = get_conv_dims(input_size=input_size)
     td_buf = lz_pack(transform(input_size))
     ane.iowrite(td_iova, td_buf)
@@ -148,11 +155,17 @@ def main(input_size, alpha, beta):
     dst_arr = ane.tiler.tile2arr(dst_buf, output_dim)
 
     if DBG_CFG_CONV_TEST:
-        ref_arr = conv2d_nchw_python(src_arr, krn_arr, stride=1, padding='VALID')
+        ref_arr = conv2d_nchw_python(src_arr, krn_arr, 
+                                        stride=1, padding='VALID')
         if not (np.array_equal(dst_arr, ref_arr)):
             print(dst_arr)
             print(ref_arr)
             raise ValueError ('uh oh, good luck')
+
+    (dma_r2, dma_w2, dma_rw2) = get_dma_perf_stats()
+    print('perf: delta: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
+                                        % (dma_r2-dma_r1, dma_w2-dma_w1, 
+                                           dma_rw2-dma_rw1))
     return dst_arr
 
 

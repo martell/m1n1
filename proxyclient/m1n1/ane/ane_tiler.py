@@ -4,27 +4,7 @@ import struct
 import numpy as np
 
 from m1n1.ane.ane_utils import zero_pad, chunks
-
-
-def is_pow2(v):
-    # https://stackoverflow.com/a/57027610
-    return (v != 0) and (v & (v-1) == 0)
-
-def pow2log2(u):
-    # https://stackoverflow.com/a/21443672
-    assert(is_pow2(u))
-    t = (u > 0xffff) << 4
-    u >>= t
-    s = (u > 0xff  ) << 3
-    u >>= s
-    t |= s
-    s = (u > 0xf   ) << 2
-    u >>= s
-    t |= s
-    s = (u > 0x3   ) << 1
-    u >>= s
-    t |= s
-    return (t | (u >> 1))
+from m1n1.ane.ane_utils import pow2log2, is_pow2, nxtmult4
 
 
 class ANETiler:
@@ -54,7 +34,14 @@ class ANETiler:
     def yV_2_xV(self, yV):
         return (np.where(self.yV_arr == yV)[0][0] / 4) + 0.25
 
+    def tile2arr1d(self, tile, dim):
+        assert(len(dim) == 1)
+        yVs = struct.unpack('<' + 'H'*(len(tile)//2), tile)[:dim[0]]
+        out_arr = np.array([self.yV_2_xV(yV) for yV in yVs])
+        return out_arr
+
     def tile2arr(self, tile, dim):
+        assert(len(dim) == 4)
         (N, C, H, W) = dim
         yV_c = W # unk
         U_c = C * H # definite
@@ -72,6 +59,13 @@ class ANETiler:
         out_arr = np.array(out_arr)
         out_arr = out_arr.reshape((N, C, H, W))
         return out_arr
+    
+    def arr1d2tile(self, in_arr):
+        assert(in_arr.ndim == 1)
+        yVs = [struct.pack('<H', self.xV_2_yV(xV)) for xV in in_arr]
+        tile = b''.join(yVs)
+        tile = zero_pad(tile, nxtmult4(len(tile)))
+        return tile
 
     def arr2tile(self, in_arr):
         assert(in_arr.ndim == 4)

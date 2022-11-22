@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: MIT
 
-def input_size_T(input_size):
+def conv_2d_input_T(input_size):
+    assert(1 <= input_size <= 64)
+
     td_magic = [
         0x2000000, 0x0, 0x422, 0x0, 0xfff86a, 0x0, 0x30009800, 0x0,
         0x1024025, 0x21, 0xf401f800, 0x40, 0x0, 0x81, 0x80, 0x80,
@@ -87,11 +90,6 @@ def input_size_T(input_size):
     td_magic[0x26c//4] *= (batch // 4) + 1
 
     return td_magic
-
-
-def transform(input_size):
-    return input_size_T(input_size)
-
 
 def get_conv_dims(
             filters=1, kernel_size=1, stride=1, 

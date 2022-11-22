@@ -1,31 +1,5 @@
 # SPDX-License-Identifier: MIT
 
-import struct
-from m1n1.utils import Register32
-
-class HDR0(Register32):
-    TID = 31, 24
-    NID = 23, 16
-    UNK1 = 15, 8
-    UNK2 = 7, 0
-
-def pack_reg32(reg):
-    return struct.pack('<L', reg._value)
-
-def get_nid_from_buf(td_buf):
-    hdr0 = HDR0(struct.unpack('<' + 'L', td_buf[:4])[0])
-    assert((hdr0.NID > 0) and (hdr0.NID < 0xff))
-    return hdr0.NID & 0xff
-
-def set_nid_in_buf(td_buf, nid):
-    assert((nid > 0) and (nid < 0xff))
-    hdr0 = HDR0(struct.unpack('<' + 'L', td_buf[:4])[0])
-    hdr0.NID = nid
-    repacked = pack_reg32(hdr0) + td_buf[4:]
-    assert(len(repacked) == len(td_buf))
-    return repacked
-
-
 class Task:
     def __init__(self, req_iova=None, nid=None, bar=None, size=None):
         self.req_iova = req_iova
@@ -42,13 +16,13 @@ class Task:
 
 class BAR:
     def __init__(self):
-        self.p_head_0 = 0
-        self.p_krn_1 = 0
+        self.p_head = 0
+        self.p_krn = 0
         self.p_2 = 0
         self.p_3 = 0
-        self.p_dst_4 = 0
-        self.p_src_5 = 0
-        self.p_6 = 0
+        self.p_dst = 0
+        self.p_src1 = 0
+        self.p_src2 = 0
         self.p_7 = 0
         self.p_8 = 0
         self.p_9 = 0
@@ -78,4 +52,3 @@ class BAR:
 
     def get_table(self):
         return list(vars(self).values())
-

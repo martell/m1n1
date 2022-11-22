@@ -10,9 +10,10 @@ import numpy as np
 
 from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
-from m1n1.ane.ane_td import Task, set_nid_in_buf
+from m1n1.ane.ane_task import Task
 from m1n1.ane.ane_utils import *
-from m1n1.ane.conv import get_conv_dims, transform
+from m1n1.ane.td.hdr import set_nid_in_buf
+from m1n1.ane.td.conv import get_conv_dims, conv_2d_input_T
 
 """
 simple 2D NCHW convolution
@@ -39,7 +40,7 @@ alpha, beta:
 
 
 curl -LJO https://raw.githubusercontent.com/seanlatias/tvm/59512007e49ebb0d8080b38465e93c241b13413c/topi/python/topi/testing/conv2d_nchw_python.py 
-into ane/conv/ to enable testing
+into ane/td/ to enable testing
 
 """
 
@@ -48,7 +49,7 @@ DBG_CFG_SHELL_RUN = 1
 DBG_CFG_CONV_TEST = 1
 
 if DBG_CFG_CONV_TEST:
-    from m1n1.ane.conv.conv2d_nchw_python import conv2d_nchw_python
+    from m1n1.ane.td.conv2d_nchw_python import conv2d_nchw_python
 
 ane = ANE(u)
 ane.powerup()
@@ -81,7 +82,7 @@ def map_dart_vmem_region(ane, vmem_start, vmem_end):
 # mem management is nonexistent rn
 # similar to what macos allocs:
 td_iova = 0x1fc0000
-krn_iova = 0x1fc0280 # len(td_buf) == 0x274
+krn_iova = 0x1fc0280 # td_iova + len(td_buf) roundedup
 req_iova_base = 0x1fc8000 # fifo
 src_iova = 0x1fd8000 
 dst_iova = 0x1fe0000 # 0x1fe4000 if src tile overflow
@@ -93,7 +94,7 @@ print('vmem region initialized.')
 
 # ---------------------------------------------
 
-def push2hw(ane, td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
+def push2hw(td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
     """
     push to hw after bufs are written
     """
@@ -114,8 +115,8 @@ def push2hw(ane, td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
     ane.iowrite(nxt_req_iova, nxt_td_buf)
 
     task = Task(nid=cur_nid, req_iova=cur_req_iova, size=td_size)
-    task.setup_BAR(dict(p_head_0=td_iova, p_krn_1=krn_iova, 
-                        p_dst_4=dst_iova, p_src_5=src_iova))
+    task.setup_BAR(dict(p_head=td_iova, p_krn=krn_iova, 
+                        p_dst=dst_iova, p_src1=src_iova))
     
     # dst_buf_prev = ane.ioread(dst_iova, ane.TILE_SIZE)
     ane.get_timestamp()
@@ -127,18 +128,12 @@ def push2hw(ane, td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
 
 # ---------------------------------------------
 
-def get_dma_perf_stats():
-    dma_rw = ane.perf_regs.DMA_RW.val
-    dma_r = ane.perf_regs.DMA_R.val
-    dma_w = dma_rw_prev - dma_r_prev
-    return (dma_r, dma_w, dma_rw)
-
-
-def main(input_size, alpha, beta):
-    (dma_r1, dma_w1, dma_rw1) = get_dma_perf_stats()
+def main(input_size, alpha, beta, 
+            req_idx=0, cur_nid=0x15, queue_id=4):
+    (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
 
     input_dim, weight_dim, output_dim = get_conv_dims(input_size=input_size)
-    td_buf = lz_pack(transform(input_size))
+    td_buf = lz_pack(conv_2d_input_T(input_size))
     ane.iowrite(td_iova, td_buf)
     
     src_arr = np.zeros(input_dim) + alpha
@@ -150,7 +145,7 @@ def main(input_size, alpha, beta):
     ane.iowrite(krn_iova, krn_buf)
 
     # lets gooo
-    push2hw(ane, td_buf)
+    push2hw(td_buf, req_idx, cur_nid, queue_id)
     dst_buf = ane.ioread(dst_iova, ane.TILE_SIZE)
     dst_arr = ane.tiler.tile2arr(dst_buf, output_dim)
 
@@ -158,14 +153,13 @@ def main(input_size, alpha, beta):
         ref_arr = conv2d_nchw_python(src_arr, krn_arr, 
                                         stride=1, padding='VALID')
         if not (np.array_equal(dst_arr, ref_arr)):
-            print(dst_arr)
-            print(ref_arr)
             raise ValueError ('uh oh, good luck')
 
-    (dma_r2, dma_w2, dma_rw2) = get_dma_perf_stats()
+    (dma_r2, dma_w2, dma_rw2) = ane.get_dma_perf_stats()
+    print('perf: total: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
+                                        % (dma_r2, dma_w2, dma_rw2))
     print('perf: delta: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
-                                        % (dma_r2-dma_r1, dma_w2-dma_w1, 
-                                           dma_rw2-dma_rw1))
+                                        % (dma_r2-dma_r1, dma_w2-dma_w1, dma_rw2-dma_rw1))
     return dst_arr
 
 
@@ -188,10 +182,9 @@ def full_poc():
     return
 
 
-main(input_size=1, alpha=0.25, beta=0.25)
-main(input_size=32, alpha=8.00, beta=7.75)
+main(input_size=1, alpha=0.25, beta=0.25, queue_id=np.random.randint(1, 7))
+main(input_size=32, alpha=8.00, beta=7.75, queue_id=np.random.randint(1, 7))
 
 
 if DBG_CFG_SHELL_RUN:
     run_shell(globals(), msg="Have fun!")
-

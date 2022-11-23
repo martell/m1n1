@@ -23,7 +23,7 @@ input2: (M,)
 output: (M,)
 
 1 <= M <= 4000 # got bored after lol
-min(arr) >= 0.25 && max(arr) <= 250
+min(arr) >= 0.25 && max(arr) <= 250.00 # use @ own risk
 """
 
 DBG_CFG_REGMON_ON = 1
@@ -59,7 +59,6 @@ def map_dart_vmem_region(ane, vmem_start, vmem_end):
 
 # mem management is nonexistent rn
 # similar to what macos allocs:
-
 td_iova = 0x1fc0000
 # even though kernel is nonexistent in
 # elemwise mode, it's still written in BAR
@@ -111,7 +110,7 @@ def push2hw(td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
 # ---------------------------------------------
 
 mode_ref_lambdas = {'ADD': lambda A, B: A + B, 
-                    'MULTIPLY': lambda A, B: A * B,
+                    'MULT': lambda A, B: A * B,
                     'MAX': lambda A, B: np.maximum(A, B),
                     'MIN': lambda A, B: np.minimum(A, B)}
 
@@ -122,7 +121,6 @@ def main(src_arr1, src_arr2, mode):
     assert(src_arr1.ndim == 1)
 
     (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
-
 
     input_size = len(src_arr1)
     assert(1 <= input_size <= 0x2000)
@@ -145,7 +143,6 @@ def main(src_arr1, src_arr2, mode):
     if not (np.array_equal(dst_arr, ref_arr)):
         raise ValueError ('uh oh, good luck')
 
-
     (dma_r2, dma_w2, dma_rw2) = ane.get_dma_perf_stats()
     print('perf: total: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
                                         % (dma_r2, dma_w2, dma_rw2))
@@ -163,7 +160,7 @@ print(src_arr1, src_arr2, dst_arr)
 M = 4000
 src_arr1 = np.zeros((M,)) + 2.00
 src_arr2 = np.zeros((M,)) + 3.50
-dst_arr = main(src_arr1=src_arr1, src_arr2=src_arr2, mode='MULTIPLY')
+dst_arr = main(src_arr1=src_arr1, src_arr2=src_arr2, mode='MULT')
 print(src_arr1, src_arr2, dst_arr)
 
 M = 64

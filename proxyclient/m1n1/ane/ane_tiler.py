@@ -3,13 +3,14 @@
 import struct
 import numpy as np
 
-from m1n1.ane.ane_utils import zero_pad, chunks
-from m1n1.ane.ane_utils import pow2log2, is_pow2, nxtmult4
+from m1n1.ane.ane_utils import * 
 
 
 class ANETiler:
 
     U_w = 0x40 # work unit width
+    step = 2**-2
+    precision = int(1/step)
 
     def __init__(self, xcount=1000):
         self.xdata = np.arange(0, xcount)
@@ -28,12 +29,12 @@ class ANETiler:
 
     def xV_2_yV(self, xV):
         yV = self.yV_arr[int(xV*4) - 1]
-        assert(yV == yV & 0xffff) 
-        return yV 
+        assert(yV == yV & 0xffff)
+        return yV
 
     def yV_2_xV(self, yV):
-        return (np.where(self.yV_arr == yV)[0][0] / 4) + 0.25
-
+        return (np.where(self.yV_arr == yV)[0][0] / 4) + self.step
+    
     def tile2arr1d(self, tile, dim):
         assert(len(dim) == 1)
         yVs = struct.unpack('<' + 'H'*(len(tile)//2), tile)[:dim[0]]

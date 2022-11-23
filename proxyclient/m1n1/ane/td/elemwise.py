@@ -1,22 +1,18 @@
 # SPDX-License-Identifier: MIT
 
+from enum import IntEnum
 from m1n1.ane.ane_utils import pow2log2
 
-mode_mapping = {'ADD': 0x0, 'MULTIPLY':0x4, 
-                'MAX': 0x8, 'MIN': 0xc,}
+class E_ELEMWISE_MODE(IntEnum):
+    ADD = 0x0
+    MULT = 0x4
+    MAX = 0x8
+    MIN = 0xc
 
 def elemwise_1d_T(input_size, mode):
     td_magic = elemwise_1d_input_T(input_size)
-
-    mode_const = 0x0
-    if mode.upper() not in mode_mapping:
-        print('invalid mode, defaulting to ADD')
-        mode_const = 0x0
-    else:
-        mode_const = mode_mapping[mode.upper()]
-    td_magic[0x22c//4] = 0x80000 | mode_const
+    td_magic[0x22c//4] = 0x80000 | E_ELEMWISE_MODE[mode]
     return td_magic
-
 
 def elemwise_1d_input_T(input_size):
     # got bored after lol

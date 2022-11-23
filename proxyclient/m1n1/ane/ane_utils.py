@@ -57,3 +57,11 @@ def lz_unpack(data):
 def lz_pack(data):
     assert((isinstance(data, tuple)) or (isinstance(data, list)))
     return struct.pack('<' + 'L'*(len(data)), *data)
+
+def ez_unpack(data):
+    assert((isinstance(data, bytes)) and (len(data)%4 == 0))
+    return struct.unpack('<' + 'L'*(len(data)//4), data)
+
+def ez_pack(data):
+    assert((isinstance(data, tuple)) or (isinstance(data, list)))
+    return struct.pack('<' + 'L'*(len(data)), *data)

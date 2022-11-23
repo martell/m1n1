@@ -30,14 +30,8 @@ input_size:
 alpha, beta:
     - ufloat quart values to populate src, krn arr resp.
         - haven't tested for non-uniform mats
-    - getting weird rounding errors below 2**-2
-    - packed floats also trail off past 1024
-    - so float packing is capped to 250*4 = 1000 for now
-        - so soft cap:
-            - 0.25 <= alpha <= 8.00
-            - 0.25 <= beta <= 7.75
-        - to account for dst (8 * 7.75 * 4 = 248)
-
+    - getting weird rounding errors below 2**-3
+    - min(arr) >= 0.25 && max(arr) <= 250.00 # use @ own risk
 
 curl -LJO https://raw.githubusercontent.com/seanlatias/tvm/59512007e49ebb0d8080b38465e93c241b13413c/topi/python/topi/testing/conv2d_nchw_python.py 
 into ane/td/ to enable testing
@@ -180,7 +174,6 @@ def full_poc():
                 main(input_size=input_size, alpha=alpha, beta=beta)
                 time.sleep(0.05)
     return
-
 
 main(input_size=1, alpha=0.25, beta=0.25, queue_id=np.random.randint(1, 7))
 main(input_size=32, alpha=8.00, beta=7.75, queue_id=np.random.randint(1, 7))

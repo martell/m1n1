@@ -13,7 +13,7 @@ from m1n1.ane.ane_tm import TaskManager
 from m1n1.ane.ane_task import Task
 from m1n1.ane.ane_utils import *
 from m1n1.ane.td.hdr import set_nid_in_buf
-from m1n1.ane.td.conv import get_conv_dims, conv_2d_input_T
+from m1n1.ane.td.conv2d import get_conv2d_dims, conv2d_transform
 
 """
 simple 2D NCHW convolution
@@ -21,11 +21,12 @@ simple 2D NCHW convolution
 AVAILABLE PARAMS: 
 input_size: 
     - aka H/W of NCHW
-    - td_magic transform verified for 1 <= x <= 64
-    - however tile overflows at 32, which 
-        - enables dma interleave into 2 separate tiles
-        - .. which i havent figured out, sigh
+    - td transform verified for 1 <= x <= 1000
+    - however tile overflows @ 32, enabing 
+      dma interleave into 2 separate tiles, which
+      obviously i havent figured out yet, sigh
     - so hard cap 1 <= input_size <= 32
+    - .. also C == 5 & N == 1 until further notice 
 
 alpha, beta:
     - ufloat quart values to populate src, krn arr resp.
@@ -126,8 +127,8 @@ def main(input_size, alpha, beta,
             req_idx=0, cur_nid=0x15, queue_id=4):
     (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
 
-    input_dim, weight_dim, output_dim = get_conv_dims(input_size=input_size)
-    td_buf = lz_pack(conv_2d_input_T(input_size))
+    input_dim, weight_dim, output_dim = get_conv2d_dims(input_size=input_size)
+    td_buf = lz_pack(conv2d_transform(input_size))
     ane.iowrite(td_iova, td_buf)
     
     src_arr = np.zeros(input_dim) + alpha
@@ -176,7 +177,7 @@ def full_poc():
     return
 
 main(input_size=1, alpha=0.25, beta=0.25, queue_id=np.random.randint(1, 7))
-main(input_size=32, alpha=8.00, beta=7.75, queue_id=np.random.randint(1, 7))
+main(input_size=32, alpha=8.00, beta=6.25, queue_id=np.random.randint(1, 7))
 
 
 if DBG_CFG_SHELL_RUN:

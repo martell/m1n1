@@ -33,6 +33,7 @@ class ANETiler:
         return yV
 
     def yV_2_xV(self, yV):
+        if (yV == 0): return 0
         return (np.where(self.yV_arr == yV)[0][0] / 4) + self.step
     
     def tile2arr1d(self, tile, dim):

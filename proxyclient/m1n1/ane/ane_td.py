@@ -24,11 +24,14 @@ def set_nid_in_buf(td_buf, nid):
 
 
 class Task:
-    def __init__(self, req_iova=None, nid=None, bar=None, size=None):
-        self.req_iova = req_iova
-        self.nid = nid
-        self.bar = bar
-        self.size = size
+    def __init__(self, setupdict):
+        self.req_iova = None
+        self.nid = None
+        self.bar = None
+        self.size = None
+        self.count = None
+        for key in setupdict:
+            setattr(self, key, setupdict[key])
         return
 
     def setup_BAR(self, bardict):
@@ -42,7 +45,7 @@ class BAR:
         self.p_head = 0
         self.p_krn = 0
         self.p_2 = 0
-        self.p_3 = 0
+        self.p_intm = 0
         self.p_dst = 0
         self.p_src1 = 0
         self.p_src2 = 0

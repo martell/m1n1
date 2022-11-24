@@ -22,6 +22,10 @@ def zero_pad(buf, size):
     assert(not diff & 1)
     return buf + (struct.pack('<H', 0))*(diff//2)
 
+def make_padding(size):
+    assert(not size & 1)
+    return (struct.pack('<H', 0))*(size//2)
+
 def chunks(xs, size):
     # https://stackoverflow.com/a/312464
     n = max(1, size)

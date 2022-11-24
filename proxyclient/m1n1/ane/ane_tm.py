@@ -84,9 +84,9 @@ class TaskManager:
         # cp to main queue in (TM rnge)
         self.regs.REQ_ADDR.val = self.tq.REQ_ADDR1[queue_id].val
 
-        # if (num == 0) req doesnt go through
-        num_bufs = 1 # TODO derive from BAR
-        self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | num_bufs
+        # if 0 req doesnt go through
+        tqcount = 5 # TODO 
+        self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | tqcount
 
         # this write actually triggers the circuit
         # so main queue can be adjusted before this

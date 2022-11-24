@@ -13,12 +13,12 @@ class TaskQueue(RegMap):
     TQINFO = irange(0x14, 8, 0x148), R_TQINFO
 
     BAR1 = (irange(0x20, 8, 0x148), irange(0x0, 0x20, 4)), Register32
-    REQ_NID1 = irange(0xa0, 8, 0x148), Register32 # inv
+    REQ_NID1 = irange(0xa0, 8, 0x148), Register32
     REQ_SIZE2 = irange(0xa4, 8, 0x148), Register32
     REQ_ADDR2 = irange(0xa8, 8, 0x148), Register32
 
     BAR2 = (irange(0xac, 8, 0x148), irange(0x0, 0x20, 4)), Register32
-    REQ_NID2 = irange(0x12c, 8, 0x148), Register32 # inv
+    REQ_NID2 = irange(0x12c, 8, 0x148), Register32
     REQ_SIZE1 = irange(0x130, 8, 0x148), Register32
     REQ_ADDR1 = irange(0x134, 8, 0x148), Register32
 
@@ -54,6 +54,13 @@ class TMRegs(RegMap):
     UNK_IRQ_EN1 = 0x68, Register32
     UNK_IRQ_ACK = 0x6c, Register32
     UNK_IRQ_EN2 = 0x70, Register32
+
+
+class TD_HDR0(Register32):
+    TID = 31, 24
+    NID = 23, 16
+    LNID = 15, 8
+    EON = 7, 0
 
 
 class ANEPerfRegs(RegMap):

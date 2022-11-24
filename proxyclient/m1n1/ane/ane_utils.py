@@ -31,6 +31,9 @@ def chunks(xs, size):
     n = max(1, size)
     return list((xs[i:i+n] for i in range(0, len(xs), n)))
 
+def roundup(x, y):
+    return ((x+(y-1)) & (-y))
+
 def is_pow2(v):
     # https://stackoverflow.com/a/57027610
     return (v != 0) and (v & (v-1) == 0)

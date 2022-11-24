@@ -4,10 +4,8 @@ import numpy as np
 
 
 def conv2d_t(base, x, y):
-    """
-    verified 1 <= x <= 1000 for y == 5
-   
-    """
+    # verified 1 <= x <= 1000 for y == 5
+    
     base[0x4//4] = x4_func(x)
     base[0xb4//4] = xb4_func(y)
     
@@ -188,6 +186,7 @@ def x224_func(x):
 
 def x220_func(x):
     return x224_func(x)
+    
 def x218_func(x):
     return x224_func(x)
 

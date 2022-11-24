@@ -10,10 +10,9 @@ import numpy as np
 
 from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
-from m1n1.ane.ane_task import Task
+from m1n1.ane.ane_td import Task, set_nid_in_buf
 from m1n1.ane.ane_utils import *
-from m1n1.ane.td.hdr import set_nid_in_buf
-from m1n1.ane.td.elemwise import elemwise_transform
+from m1n1.ane.compiler.elemwise import elemwise_transform
 
 """
 1D element-wise ADD/MULTIPLY/MAX/MIN
@@ -137,9 +136,9 @@ def main(src_arr1, src_arr2, mode):
     return dst_arr
 
 
-M = 20
-src_arr1 = np.linspace(0.25, M, M*4)[:M]
-src_arr2 = np.linspace(0.25, M, M*4)[:M]
+M = 4000
+src_arr1 = np.zeros((M,)) + 200.25
+src_arr2 = np.zeros((M,)) + 49.75
 dst_arr = main(src_arr1=src_arr1, src_arr2=src_arr2, mode='ADD')
 print(src_arr1, src_arr2, dst_arr)
 

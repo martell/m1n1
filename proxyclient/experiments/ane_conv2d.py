@@ -10,10 +10,10 @@ import numpy as np
 
 from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
-from m1n1.ane.ane_task import Task
+from m1n1.ane.ane_td import Task, set_nid_in_buf
 from m1n1.ane.ane_utils import *
-from m1n1.ane.td.hdr import set_nid_in_buf
-from m1n1.ane.td.conv2d import get_conv2d_dims, conv2d_transform
+from m1n1.ane.compiler.conv2d import get_conv2d_dims, conv2d_transform
+
 
 """
 simple 2D NCHW convolution
@@ -164,9 +164,10 @@ def full_poc():
                 time.sleep(0.05)
     return
 
-main(input_size=1, alpha=0.25, beta=0.25, queue_id=np.random.randint(1, 7))
-main(input_size=32, alpha=8.00, beta=6.25, queue_id=np.random.randint(1, 7))
+main(input_size=1, alpha=0.50, beta=0.50, queue_id=np.random.randint(1, 7))
+main(input_size=32, alpha=8.00, beta=5.25, queue_id=np.random.randint(1, 7))
 
 
 if DBG_CFG_SHELL_RUN:
     run_shell(globals(), msg="Have fun!")
+

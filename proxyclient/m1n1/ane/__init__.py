@@ -91,7 +91,7 @@ class ANE:
             assert(self.dart_regs_all[instance].TTBR[0, 0].val == ttbr0_addr)
         return ttbr0_addr
 
-    def init_vmem_region(self, start=0x1fa0000, end=0x1ff0000):
+    def init_vmem_region(self, start=0x1fa0000, end=0x1ffc000):
         self.start = start
         self.end = end
         for iova in range(self.start, self.end, self.PAGE_SIZE):

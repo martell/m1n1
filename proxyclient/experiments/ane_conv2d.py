@@ -50,10 +50,8 @@ ane = ANE(u)
 ane.powerup()
 
 if DBG_CFG_REGMON_ON:
-    rnges = [
-            (0x26b900000, 0x26b90c1fc, 'perf'),
-            (0x26bc04000, 0x26bc28000, 'ane'),
-            ]
+    rnges = [(0x26b900000, 0x26b90c1fc, 'perf'),
+            (0x26bc04000, 0x26bc28000, 'ane'),]
     mon = RegMonitor(u)
     for (start, end, name) in rnges:
         mon.add(start, end-start, name=name)
@@ -67,25 +65,15 @@ if DBG_CFG_REGMON_ON:
 
 # ---------------------------------------------
 
-def map_dart_vmem_region(ane, vmem_start, vmem_end):
-    for iova in range(vmem_start, vmem_end, ane.PAGE_SIZE):
-        phys = ane.u.memalign(ane.PAGE_SIZE, ane.PAGE_SIZE)
-        ane.p.memset32(phys, 0, ane.PAGE_SIZE)
-        ane.dart.iomap_at(0, iova, phys, ane.PAGE_SIZE)
-    return
+ane.init_vmem_region()
 
 # mem management is nonexistent rn
 # similar to what macos allocs:
 td_iova = 0x1fc0000
-krn_iova = 0x1fc0280 # td_iova + len(td_buf) roundedup
+krn_iova = 0x1fc0280 # written in BAR regardless
 req_iova_base = 0x1fc8000 # fifo
 src_iova = 0x1fd8000 
 dst_iova = 0x1fe0000 # 0x1fe4000 if src tile overflow
-
-# map around work region
-map_dart_vmem_region(ane, 0x1fa0000, 0x1ff0000)
-ane.syncttbr() 
-print('vmem region initialized.')
 
 # ---------------------------------------------
 

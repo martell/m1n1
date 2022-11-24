@@ -22,29 +22,20 @@ AVAILABLE PARAMS:
 input_size: 
     - aka H/W of NCHW
     - td transform verified for 1 <= x <= 1000
-    - however tile overflows @ 32, enabing 
+    - however tile overflows @ 32, causing 
       dma interleave into 2 separate tiles, which
-      obviously i havent figured out yet, sigh
+      i havent figured out yet
     - so hard cap 1 <= input_size <= 32
     - .. also C == 5 & N == 1 until further notice 
 
 alpha, beta:
-    - ufloat quart values to populate src, krn arr resp.
-        - haven't tested for non-uniform mats
-    - getting weird rounding errors below 2**-3
-    - min(arr) >= 0.25 && max(arr) <= 250.00 # use @ own risk
-
-curl -LJO https://raw.githubusercontent.com/seanlatias/tvm/59512007e49ebb0d8080b38465e93c241b13413c/topi/python/topi/testing/conv2d_nchw_python.py 
-into ane/td/ to enable testing
+    - populates src, krn respectively
+    - haven't tested for non-uniform mats
 
 """
 
 DBG_CFG_REGMON_ON = 1
 DBG_CFG_SHELL_RUN = 1
-DBG_CFG_CONV_TEST = 1
-
-if DBG_CFG_CONV_TEST:
-    from m1n1.ane.td.conv2d_nchw_python import conv2d_nchw_python
 
 ane = ANE(u)
 ane.powerup()
@@ -131,12 +122,7 @@ def main(input_size, alpha, beta,
     push2hw(td_buf, req_idx, cur_nid, queue_id)
     dst_buf = ane.ioread(dst_iova, ane.TILE_SIZE)
     dst_arr = ane.tiler.tile2arr(dst_buf, output_dim)
-
-    if DBG_CFG_CONV_TEST:
-        ref_arr = conv2d_nchw_python(src_arr, krn_arr, 
-                                        stride=1, padding='VALID')
-        if not (np.array_equal(dst_arr, ref_arr)):
-            raise ValueError ('uh oh, good luck')
+    print(dst_arr)
 
     (dma_r2, dma_w2, dma_rw2) = ane.get_dma_perf_stats()
     print('perf: total: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
@@ -146,26 +132,8 @@ def main(input_size, alpha, beta,
     return dst_arr
 
 
-def full_poc():
-    """
-    if you do choose to run this:
-    it does feel *slightly* warmer
-    and you can guess the state of pmgmt rn
-    so i suggest cooling down / rebooting into macos
-    """
-    alphas = np.linspace(0.25, 8.00, int(8.00*4))
-    betas = np.linspace(0.25, 7.75, int(7.75*4))
-    input_sizes = np.arange(1, 32 + 1)
-
-    for alpha in alphas:
-        for beta in betas:
-            for input_size in input_sizes:
-                main(input_size=input_size, alpha=alpha, beta=beta)
-                time.sleep(0.05)
-    return
-
-main(input_size=1, alpha=0.50, beta=0.50, queue_id=np.random.randint(1, 7))
-main(input_size=32, alpha=8.00, beta=5.25, queue_id=np.random.randint(1, 7))
+dst_arr = main(input_size=1, alpha=0.2897341, beta=0.1439872, queue_id=np.random.randint(1, 7))
+dst_arr = main(input_size=32, alpha=3.141592, beta=2022.12345, queue_id=np.random.randint(1, 7))
 
 
 if DBG_CFG_SHELL_RUN:

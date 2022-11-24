@@ -9,7 +9,7 @@ class E_ELEMWISE_MODE(IntEnum):
     MAX = 0x8
     MIN = 0xc
 
-def elemwise_1d_T(input_size, mode):
+def elemwise_transform(input_size, mode):
     td_magic = elemwise_1d_input_T(input_size)
     td_magic[0x22c//4] = 0x80000 | E_ELEMWISE_MODE[mode]
     return td_magic

@@ -13,7 +13,7 @@ from m1n1.ane.ane_tm import TaskManager
 from m1n1.ane.ane_task import Task
 from m1n1.ane.ane_utils import *
 from m1n1.ane.td.hdr import set_nid_in_buf
-from m1n1.ane.td.elemwise import elemwise_1d_T
+from m1n1.ane.td.elemwise import elemwise_transform
 
 """
 1D element-wise ADD/MULTIPLY/MAX/MIN
@@ -126,7 +126,7 @@ def main(src_arr1, src_arr2, mode):
     assert(1 <= input_size <= 0x2000)
     input_dim, output_dim = (input_size,), (input_size,)
     
-    td_buf = lz_pack(elemwise_1d_T(input_size, mode))
+    td_buf = ez_pack(elemwise_transform(input_size, mode))
     ane.iowrite(td_iova, td_buf)
 
     src_buf1 = zero_pad(ane.tiler.arr1d2tile(src_arr1), ane.TILE_SIZE)

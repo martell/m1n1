@@ -25,3 +25,13 @@ Usually about 0x280-0x300, with a hard cap @ <0x1000.
 This does tie into BAR (base address resolution? register?) because it has
 to dynamically adjust for input/intermediate/output buf count. 
 The plain f(input1, input2) -> output form should work.
+
+
+# Progress
+
+- 2D NCHW conv
+
+- 1D element-wise ADD/MULT/MIN/MAX
+
+- 1D activation RELU/LINEAR
+

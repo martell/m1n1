@@ -128,7 +128,7 @@ def main(input_size, alpha, beta,
     (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
 
     input_dim, weight_dim, output_dim = get_conv2d_dims(input_size=input_size)
-    td_buf = lz_pack(conv2d_transform(input_size))
+    td_buf = ez_pack(conv2d_transform(input_size))
     ane.iowrite(td_iova, td_buf)
     
     src_arr = np.zeros(input_dim) + alpha

@@ -8,6 +8,7 @@ from m1n1.hw.ane import ANERegs, ANEPerfRegs
 
 from m1n1.ane.ane_pwr import powerup
 from m1n1.ane.ane_dart import init_ane_dart_regs
+from m1n1.ane.ane_context import ANEBufManager
 from m1n1.ane.ane_tiler import ANETiler 
 
 
@@ -38,9 +39,7 @@ class ANE:
         self.dart.initialize()
         self.dart_regs_all = init_ane_dart_regs(self)
         
-        self.start = None
-        self.end = None
-
+        self.bufmngr = ANEBufManager(self)
         self.tiler = ANETiler() # static
         return
 
@@ -90,24 +89,6 @@ class ANE:
         for instance in range(3):
             assert(self.dart_regs_all[instance].TTBR[0, 0].val == ttbr0_addr)
         return ttbr0_addr
-
-    def init_vmem_region(self, start=0x1fa0000, end=0x1ffc000):
-        self.start = start
-        self.end = end
-        for iova in range(self.start, self.end, self.PAGE_SIZE):
-            phys = self.u.memalign(self.PAGE_SIZE, self.PAGE_SIZE)
-            self.p.memset32(phys, 0, self.PAGE_SIZE)
-            self.dart.iomap_at(0, iova, phys, self.PAGE_SIZE)
-        self.syncttbr()
-        print('vmem region initialized.')
-        return
-
-    def flush_vmem_region(self):
-        if (self.start is None or self.end is None):
-            raise ValueError('vmem not initialized.')
-        for iova in range(self.start, self.end, self.PAGE_SIZE):
-            self.iowrite(iova, (struct.pack('<L', 0))*(self.PAGE_SIZE//4))
-        return
 
     def get_dma_perf_stats(self):
         dma_rw = self.perf_regs.DMA_RW.val

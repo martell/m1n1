@@ -16,7 +16,6 @@ class TaskManager:
 
         self.TM_BASE_ADDR = base_addr + 0x24000 
         self.TQ_BASE_ADDR = base_addr + 0x25000
-        
         self.regs = TMRegs(self.u, self.TM_BASE_ADDR)
         self.tq = TaskQueue(self.u, self.TQ_BASE_ADDR)
         return
@@ -33,30 +32,27 @@ class TaskManager:
         self.p.write32(0x26b874008, 0x3) # optional asc signal
         return
 
-    def enqueue_tq(self, task, queue_id=4):
+    def enqueue_tq(self, req, queue_id=4):
         if not ((queue_id >= 1) and (queue_id < self.TQ_HW_COUNT)):
             raise ValueError('1 <= queue_id <= 7')
         
         if not (self.tq.PRTY[queue_id].val == self.tq_prty[queue_id]):
-            raise ValueError('invalid priority param setup for tq %d' % queue_id)
+            raise ValueError('invalid priority setup for tq %d' % queue_id)
         
         print('enqueueing task w/ nid 0x%x @ 0x%x to tq %d' 
-                                            % (task.nid, task.req_iova, queue_id))
-        self.tq.STATUS[queue_id].val = 0x1
+                                            % (req.nid, req.iova, queue_id))
+        self.tq.STATUS[queue_id].val = 0x1 # in use
 
-        for bar_idx, bar_val in enumerate(task.bar.get_table()):
+        for bar_idx, bar_val in enumerate(req.bar.get_table()):
             self.tq.BAR1[queue_id, bar_idx].val = bar_val
+        
+        self.tq.REQ_SIZE1[queue_id].val = req.size * 0x4000 + 0x1ff0000 & 0x1ff0000
+        self.tq.REQ_ADDR1[queue_id].val = req.iova
+        # if | 1 is gone, it doesn't go through !!!; 0x2d -> 0x2d01
+        self.tq.REQ_NID1[queue_id].val = (req.nid & 0xff) << 8 | 1
 
-        # req transformations derived from task
-        req_size = task.size * 0x4000 + 0x1ff0000 & 0x1ff0000
-        # if | 1 is gone, it doesn't go through !!!
-        req_nid = (task.nid & 0xff) << 8 | 1  # 0x2d -> 0x2d01
-        self.tq.REQ_SIZE1[queue_id].val = req_size # nxt
-        self.tq.REQ_ADDR1[queue_id].val = task.req_iova
-        self.tq.REQ_NID1[queue_id].val = req_nid # INVERTED
-
-        self.tq.REQ_SIZE2[queue_id].val = 0x0 # clear other req size
-        self.tq.REQ_ADDR2[queue_id].val = 0x0 # clear other req 
+        self.tq.REQ_SIZE2[queue_id].val = 0x0 # clear other slot size
+        self.tq.REQ_ADDR2[queue_id].val = 0x0 # clear other slot 
         return
 
     def arbitrate_tq(self):
@@ -73,11 +69,12 @@ class TaskManager:
         
         return enqueued_tqs[0] # priorities are ordered
 
-    def execute_tq(self):
+    def execute_tq(self, req):
+        # TODO find slot for td count in req
         arbitered = self.arbitrate_tq()
         if (arbitered <= 0):
             print('execute_tq failed; nothing arbitered')
-            return
+            return -1
         queue_id = arbitered
         print('arbitered tq %d; pushing to execution queue...' % queue_id)
 
@@ -85,8 +82,7 @@ class TaskManager:
         self.regs.REQ_ADDR.val = self.tq.REQ_ADDR1[queue_id].val
 
         # if 0 req doesnt go through
-        tqcount = 5 # TODO 
-        self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | tqcount
+        self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | req.td_count
 
         # this write actually triggers the circuit
         # so main queue can be adjusted before this
@@ -97,7 +93,7 @@ class TaskManager:
         self.get_committed_info()
         self.handle_irq()
         self.tq.STATUS[queue_id].val = 0x0 # done
-        return
+        return 0
     
     def get_tm_status(self, max_timeouts=10, sleep_int=0.01):
         for n in range(max_timeouts):

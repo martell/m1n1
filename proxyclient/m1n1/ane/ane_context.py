@@ -22,8 +22,8 @@ class ANEBufManager:
         self.ane.p.memset32(paddr, 0, size)
         iova = self.ane.dart.iomap(0, paddr, size)
         self.ane.iowrite(iova, buf)
-        print("bufid %d: mapped paddr 0x%x to iova 0x%x for buf size 0x%x" 
-                                        % (self.bufid, paddr, iova, size))
+        print("bufid %d: mapped paddr 0x%x to iova 0x%x for buf size 0x%x"
+              % (self.bufid, paddr, iova, size))
         self.bufmap[self.bufid] = (paddr, iova, size)
         self.bufid += 1
         return iova
@@ -33,8 +33,8 @@ class ANEBufManager:
         paddr = self.ane.u.memalign(self.ane.PAGE_SIZE, size)
         self.ane.p.memset32(paddr, 0, size)
         iova = self.ane.dart.iomap(0, paddr, size)
-        print("bufid %d: mapped paddr 0x%x to iova 0x%x for size 0x%x" 
-                                        % (self.bufid, paddr, iova, size))
+        print("bufid %d: mapped paddr 0x%x to iova 0x%x for size 0x%x"
+              % (self.bufid, paddr, iova, size))
         self.bufmap[self.bufid] = (paddr, iova, size)
         self.bufid += 1
         return iova
@@ -44,12 +44,12 @@ class ANEBufManager:
             self.ane.syncttbr()
             self.dart_synced = True
         return
-    
+
     def dump_bufmap(self):
         for bufid in self.bufmap:
             (paddr, iova, size) = self.bufmap[bufid]
-            print('bufid %d: paddr 0x%x, iova 0x%x, size 0x%x' 
-                                            % (bufid, paddr, iova, size))
+            print('bufid %d: paddr 0x%x, iova 0x%x, size 0x%x'
+                  % (bufid, paddr, iova, size))
         return
 
     def dump_bufs(self):
@@ -113,28 +113,29 @@ class ReqManager:
         return
 
     def set_nid_in_buf(self, td_buf, new_nid):
-        assert((new_nid > 0) and (new_nid < 0xff))
+        assert ((new_nid > 0) and (new_nid < 0xff))
         hdr0 = TD_HDR0(struct.unpack('<L', td_buf[:4])[0])
         hdr0.NID = new_nid
         return struct.pack('<L', hdr0._value) + td_buf[4:]
 
     def init_req_fifo(self, cur_req):
         self.req_width = nextpow2(cur_req.size)
-        self.req_iova_base = self.bufmngr.alloc_size(self.REQ_FIFO_COUNT * self.req_width)
+        self.req_iova_base = self.bufmngr.alloc_size(
+            self.REQ_FIFO_COUNT * self.req_width)
         return
 
     def prep_nxt_req(self, cur_req, cur_nid=0x14):
-        assert((self.req_iova_base != None) and (self.req_width != None))
-        assert((cur_nid > 0) and (cur_nid < 0xff))
+        assert ((self.req_iova_base != None) and (self.req_width != None))
+        assert ((cur_nid > 0) and (cur_nid < 0xff))
         nxt_nid = cur_nid + self.REQ_FIFO_COUNT
-        assert((nxt_nid > 0) and (nxt_nid < 0xff))
-        
+        assert ((nxt_nid > 0) and (nxt_nid < 0xff))
+
         cur_req.nid = cur_nid
         cur_td_buf = self.set_nid_in_buf(cur_req.ts.td_buf, cur_nid)
         nxt_td_buf = self.set_nid_in_buf(cur_req.ts.td_buf, nxt_nid)
         print('cur_nid: 0x%x, nxt_nid: 0x%x' % (cur_nid, nxt_nid))
-        
-        req_idx = 0 # TODO
+
+        req_idx = 0  # TODO
         cur_req.iova = self.req_iova_base + req_idx*self.req_width
         nxt_req_iova = cur_req.iova + self.req_width
         self.ane.iowrite(cur_req.iova, cur_td_buf)
@@ -144,22 +145,22 @@ class ReqManager:
 
 class BAR:
     def __init__(self):
-        self.ts = 0
-        self.krn = 0
-        self.p_2 = 0
+        self.ts   = 0
+        self.krn  = 0
+        self.p_2  = 0
         self.intm = 0
-        self.dst = 0
+        self.dst  = 0
         self.src1 = 0
         self.src2 = 0
-        self.p_7 = 0
-        self.p_8 = 0
-        self.p_9 = 0
-        self.p_a = 0
-        self.p_b = 0
-        self.p_c = 0
-        self.p_d = 0
-        self.p_e = 0
-        self.p_f = 0
+        self.p_7  = 0
+        self.p_8  = 0
+        self.p_9  = 0
+        self.p_a  = 0
+        self.p_b  = 0
+        self.p_c  = 0
+        self.p_d  = 0
+        self.p_e  = 0
+        self.p_f  = 0
         self.p_10 = 0
         self.p_11 = 0
         self.p_12 = 0

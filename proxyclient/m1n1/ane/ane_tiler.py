@@ -2,15 +2,15 @@
 
 import struct
 import numpy as np
-from m1n1.ane.ane_utils import * 
+from m1n1.ane.ane_utils import *
 
 
 class ANETiler:
 
-    U_w = 0x40 # work unit width
+    U_w = 0x40  # work unit width
 
     def arr2tile(self, in_arr):
-        if (in_arr.ndim == 1): # no work unit for 1D
+        if (in_arr.ndim == 1):  # no work unit for 1D
             tile = b''.join([half2bytes(x) for x in in_arr])
             tile = zero_pad(tile, nxtmult4(len(tile)))
             return tile
@@ -23,34 +23,33 @@ class ANETiler:
                 tile.append(unit)
             tile = b''.join(tile)
             return tile
-        
+
         elif (in_arr.ndim == 3):
             tile = []
-            for block in in_arr: # collapse 0 w/ 1 to make units
+            for block in in_arr:  # collapse 0 w/ 1 to make units
                 for unit_slice in block:
                     unit = b''.join([half2bytes(x) for x in unit_slice])
                     unit = zero_pad(unit, self.U_w)
                     tile.append(unit)
             tile = b''.join(tile)
             return tile
-        
+
         elif (in_arr.ndim == 4):
             tile = []
             for batch in in_arr:
-                for chan in batch: 
-                    units = [] # collapse 0,1,2 to make units
-                    for height in chan: # unit_slice
+                for chan in batch:
+                    units = []  # collapse 0,1,2 to make units
+                    for height in chan:  # unit_slice
                         units.append(b''.join([half2bytes(x) for x in height]))
                     units = [zero_pad(unit, self.U_w) for unit in units]
                     units = b''.join(units)
                     tile.append(units)
             tile = b''.join(tile)
             return tile
-        
-        else:
-            raise ValueError ('invalid arr dimensions')
-        return tile
 
+        else:
+            raise ValueError('invalid arr dimensions')
+        return tile
 
     def tile2arr(self, tile, dim):
         if (len(dim) == 1):
@@ -86,22 +85,21 @@ class ANETiler:
             out_arr = np.array(out_arr)
             out_arr = out_arr.reshape(dim)
             return out_arr
-        
+
         else:
-            raise ValueError ('invalid arr dimensions')
+            raise ValueError('invalid arr dimensions')
         return out_arr
-    
 
     def arr2krn(self, in_arr):
         # TODO
         # krn swizz/tiling is slighly different
         # should never need to un-tile kernel though
-        assert(in_arr.ndim == 4)
+        assert (in_arr.ndim == 4)
         N, C, H, W = in_arr.shape
         collapsed = in_arr.reshape((H, C*W))
-        yV_c = C # definite
-        U_c = H * W # unk
-        assert(yV_c <= self.U_w)
+        yV_c = C  # definite
+        U_c = H * W  # unk
+        assert (yV_c <= self.U_w)
 
         units = []
         for unit_slice in collapsed:

@@ -18,6 +18,7 @@ also the values traced vs. adt values differ ever so slightly
 that i can't tell if theyre actually using it. 
 """
 
+
 def init_ane_dart_regs(ane):
     dart_regs_all = []
     for instance in range(3):
@@ -26,44 +27,43 @@ def init_ane_dart_regs(ane):
         dart_regs_all.append(ANEDARTRegs(ane.u, dart_addr))
 
     for instance in range(3):
-        dart_regs_all[instance].ENABLED_STREAMS.val = 0x0 # disable 
+        dart_regs_all[instance].ENABLED_STREAMS.val = 0x0  # disable
 
     # set init vals for dart0
-    dart_regs_all[0].ENABLED_STREAMS.val = 0x0 # 0xfc 
-    dart_regs_all[0].TTBR[0, 0].val = 0x0 # 0x200
-    dart_regs_all[0].TTBR[13, 0].val = 0x0 # 0x2d0
-    dart_regs_all[0].TTBR[15, 0].val = 0x0 # 0x2f0
-    dart_regs_all[0].STREAM_SELECT.val = 0xffffffff # 0x34
-    dart_regs_all[0].STREAM_COMMAND.val = 0x100000 # 0x20
+    dart_regs_all[0].ENABLED_STREAMS.val = 0x0
+    dart_regs_all[0].TTBR[0, 0].val = 0x0
+    dart_regs_all[0].TTBR[13, 0].val = 0x0
+    dart_regs_all[0].TTBR[15, 0].val = 0x0
+    dart_regs_all[0].STREAM_SELECT.val = 0xffffffff
+    dart_regs_all[0].STREAM_COMMAND.val = 0x100000
 
     apply_ane_dart_tunables(ane)
 
-    dart_regs_all[0].TCR[0].val = 0x80 # 0x100
-    dart_regs_all[0].TCR[13].val = 0x100 # 0x134
-    dart_regs_all[0].TCR[15].val = 0x100 # 0x13c
+    dart_regs_all[0].TCR[0].val = 0x80
+    dart_regs_all[0].TCR[13].val = 0x100
+    dart_regs_all[0].TCR[15].val = 0x100
 
     for instance in [1, 2]:
-        dart_regs_all[instance].ENABLED_STREAMS.val = 0x0 # 0xfc 
-        dart_regs_all[instance].TTBR[0, 0].val = 0x0 # 0x200
-        dart_regs_all[instance].TTBR[13, 0].val = 0x0 # 0x2d0
-        dart_regs_all[instance].TTBR[15, 0].val = 0x0 # 0x2f0
-        dart_regs_all[instance].STREAM_SELECT.val = 0xffffffff # 0x34
-        dart_regs_all[instance].STREAM_COMMAND.val = 0x100000 # 0x20
-        dart_regs_all[instance].CONFIG.val = 0x80016100 # 0x60
-        dart_regs_all[instance].UNK_CONFIG_68.val = 0xf0f0f # 0x68
-        dart_regs_all[instance].UNK_CONFIG_6c.val = 0x80808 # 0x6c
+        dart_regs_all[instance].ENABLED_STREAMS.val = 0x0
+        dart_regs_all[instance].TTBR[0, 0].val = 0x0
+        dart_regs_all[instance].TTBR[13, 0].val = 0x0
+        dart_regs_all[instance].TTBR[15, 0].val = 0x0
+        dart_regs_all[instance].STREAM_SELECT.val = 0xffffffff
+        dart_regs_all[instance].STREAM_COMMAND.val = 0x100000
+        dart_regs_all[instance].CONFIG.val = 0x80016100
+        dart_regs_all[instance].UNK_CONFIG_68.val = 0xf0f0f
+        dart_regs_all[instance].UNK_CONFIG_6c.val = 0x80808
 
-    # TCR[13] & TCR[15] are diff 
-    dart_regs_all[1].TCR[0].val = 0x80 # 0x100
-    dart_regs_all[1].TCR[13].val = 0x80000 # 0x134
-    dart_regs_all[1].TCR[15].val = 0x20000 # 0x13c
+    dart_regs_all[1].TCR[0].val = 0x80
+    dart_regs_all[1].TCR[13].val = 0x80000
+    dart_regs_all[1].TCR[15].val = 0x20000
 
-    dart_regs_all[2].TCR[0].val = 0x80 # 0x100
-    dart_regs_all[2].TCR[13].val = 0x100 # 0x134
-    dart_regs_all[2].TCR[15].val = 0x100 # 0x13c
+    dart_regs_all[2].TCR[0].val = 0x80
+    dart_regs_all[2].TCR[13].val = 0x100
+    dart_regs_all[2].TCR[15].val = 0x100
 
     for instance in range(3):
-        dart_regs_all[instance].ENABLED_STREAMS.val = 0x1 # enable
+        dart_regs_all[instance].ENABLED_STREAMS.val = 0x1  # enable
 
     return dart_regs_all
 
@@ -128,6 +128,7 @@ vs.
 [cpu2] [0xfffffe001387b1a8] MMIO: W.4   0x26b8040c0 (ane[0], offset 0x18040c0) = 0x31
 """
 
+
 def apply_ane_dart_tunables(ane):
     ane.p.write32(0x26b804004, 0x1)
     ane.p.write32(0x26b804008, 0x824000)
@@ -153,4 +154,4 @@ def apply_ane_dart_tunables(ane):
     ane.p.write32(0x26b8040d0, 0x3b70c033)
     ane.p.write32(0x26b8040d4, 0x2)
     ane.p.write32(0x26b8040c0, 0x31)
-    return 
+    return

@@ -3,13 +3,13 @@
 from enum import IntEnum
 from m1n1.ane.ane_utils import pow2log2
 
-class E_ELEMWISE_MODE(IntEnum):
-    ADD = 0x0
+class E_ELEMWISE_MODE(IntEnum): 
+    ADD  = 0x0
     MULT = 0x4
-    MAX = 0x8
-    MIN = 0xc
+    MAX  = 0x8
+    MIN  = 0xc
 
-def elemwise_transform(input_size, mode):
+def elemwise_transform(input_size, mode): 
     td_magic = elemwise_1d_input_T(input_size)
     td_magic[0x22c//4] = 0x80000 | E_ELEMWISE_MODE[mode]
     return td_magic

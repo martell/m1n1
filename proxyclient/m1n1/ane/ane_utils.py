@@ -19,11 +19,11 @@ def zero_pad(buf, size):
     if (len(buf) == size):
         return buf
     diff = size - len(buf)
-    assert(not diff & 1)
+    assert (not diff & 1)
     return buf + (struct.pack('<H', 0))*(diff//2)
 
 def make_padding(size):
-    assert(not size & 1)
+    assert (not size & 1)
     return (struct.pack('<H', 0))*(size//2)
 
 def chunks(xs, size):
@@ -42,13 +42,13 @@ def pow2log2(u):
     # https://stackoverflow.com/a/21443672
     t = (u > 0xffff) << 4
     u >>= t
-    s = (u > 0xff  ) << 3
+    s = (u > 0xff) << 3
     u >>= s
     t |= s
-    s = (u > 0xf   ) << 2
+    s = (u > 0xf) << 2
     u >>= s
     t |= s
-    s = (u > 0x3   ) << 1
+    s = (u > 0x3) << 1
     u >>= s
     t |= s
     return (t | (u >> 1))
@@ -69,9 +69,9 @@ def nxtmult4(num):
     return (num + 3) & ~0x03
 
 def ez_unpack(data):
-    assert((isinstance(data, bytes)) and (len(data)%4 == 0))
+    assert ((isinstance(data, bytes)) and (len(data) % 4 == 0))
     return struct.unpack('<' + 'L'*(len(data)//4), data)
 
 def ez_pack(data):
-    assert((isinstance(data, tuple)) or (isinstance(data, list)))
+    assert ((isinstance(data, tuple)) or (isinstance(data, list)))
     return struct.pack('<' + 'L'*(len(data)), *data)

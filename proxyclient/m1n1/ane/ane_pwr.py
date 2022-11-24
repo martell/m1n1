@@ -8,17 +8,17 @@ class ANEPS:
         self.u = ane.u
         self.p = ane.p
         self.ps_base_addr = self.u.adt["arm-io/ane"].get_reg(1)[0]
-        self.ps_regs = [self.ps_base_addr + 0xc000 + offset 
-                                for offset in range(0x0, 0x38, 0x8)]
+        self.ps_regs = [self.ps_base_addr + 0xc000 + offset
+                        for offset in range(0x0, 0x38, 0x8)]
 
     def ps_pwrup_stage1(self):
-        # last->first 
+        # last->first
         for ps_reg in self.ps_regs[::-1]:
             self.p.write32(ps_reg, 0x300)
         return
-    
+
     def ps_pwrup_stage2(self):
-        # first->last 
+        # first->last
         for ps_reg in self.ps_regs:
             self.p.write32(ps_reg, 0xf)
         return
@@ -29,16 +29,16 @@ class ANEPS:
     def read_ps_status(self):
         for pd_id, ps_reg in enumerate(self.ps_regs):
             pd_value = self.p.read32(ps_reg)
-            print('pd %d: 0x%x, is_on: %r' 
-                                % (pd_id, pd_value, self.pd_is_on(pd_value)))
+            print('pd %d: 0x%x, is_on: %r'
+                  % (pd_id, pd_value, self.pd_is_on(pd_value)))
         return
 
     def assert_ps_on(self):
         for pd_id, ps_reg in enumerate(self.ps_regs):
             pd_value = self.p.read32(ps_reg)
             if not (self.pd_is_on(pd_value)):
-                raise ValueError('pd %d @ 0x%x is 0x%x' 
-                                % (pd_id, ps_reg, pd_value))
+                raise ValueError('pd %d @ 0x%x is 0x%x'
+                                 % (pd_id, ps_reg, pd_value))
         return
 
 
@@ -57,18 +57,18 @@ def powerup(ane):
     ane_ps.read_ps_status()
     ane_ps.assert_ps_on()
     # ---- ps ----
-    ane.perf_regs.CTRL.val = 0xfff00000fff # on
+    ane.perf_regs.CTRL.val = 0xfff00000fff  # on
     ane.apply_static_pmgr_tunables()
     pwr_reset_at_init(ane)
     ane.apply_static_pmgr_tunables()
-    ane.perf_regs.CTRL.val = 0xfff00000fff # reset turns it off
+    ane.perf_regs.CTRL.val = 0xfff00000fff  # reset turns it off
     print('ane powered up!')
     return
 
 
 def pwr_reset_at_init(ane):
     ane.regs.ASC_EDPRCR.val = 0x2
-    ane.regs.PMGR1.val = 0xffff # re-apply tunables !!!
+    ane.regs.PMGR1.val = 0xffff  # re-apply tunables !!!
     ane.regs.PMGR2.val = 0xffff
     ane.regs.PMGR3.val = 0xffff
     # unk asc reset; stuff breaks otherwise
@@ -114,10 +114,10 @@ def fill_pwr_initdata(ane):
     fill_perf_initdata(ane)
     fill_dpe_ppt_soc_initdata(ane)
 
-    # something perf 
+    # something perf
     ane.p.write32(0x26b908000, 0x0)
     ane.p.write32(0x26b908000, 0x1)
-    return 
+    return
 
 
 def apply_more_pmgr_tunables(ane):
@@ -171,7 +171,7 @@ def apply_more_pmgr_tunables(ane):
     p.write32(0x26a0082bc, 0x4)
     p.read32(0x26a0082c0)
     p.write32(0x26a0082c0, 0x7)
-    return 
+    return
 
 
 def fill_dpe_initdata(ane):
@@ -210,7 +210,7 @@ def fill_dpe_initdata(ane):
     p.write32(0x26b8f0074, 0x82b)
     p.read32(0x26b8f0078)
     p.write32(0x26b8f0078, 0x82b)
-    return 
+    return
 
 
 def fill_perf_initdata(ane):
@@ -307,11 +307,11 @@ def fill_perf_initdata(ane):
     p.write32(0x26b9080bc, 0x0)
     p.read32(0x26b9080c0)
     p.write32(0x26b9080c0, 0x0)
-    return 
+    return
 
 
 def fill_dpe_ppt_soc_initdata(ane):
-    # aneDpePpt_soc_dpe_lee ? 
+    # aneDpePpt_soc_dpe_lee ?
     p = ane.p
 
     p.read32(0x26b8f4024)
@@ -506,4 +506,4 @@ def fill_dpe_ppt_soc_initdata(ane):
     p.write32(0x26b8f419c, 0x583)
     p.read32(0x26b8f41a0)
     p.write32(0x26b8f41a0, 0xb05)
-    return 
+    return

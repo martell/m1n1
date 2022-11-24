@@ -1,6 +1,17 @@
 # SPDX-License-Identifier: MIT
 
 import struct
+import numpy as np
+
+
+def half2bytes(x):
+    return np.float16(x).tobytes()
+
+def codehalf(x):
+    return struct.unpack('<h', np.float16(x).tobytes())[0]
+
+def decodehalf(x):
+    return np.frombuffer(struct.pack('<h', x), dtype=np.float16)[0]
 
 def zero_pad(buf, size):
     if (len(buf) > size):

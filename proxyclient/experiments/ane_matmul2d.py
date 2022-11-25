@@ -10,17 +10,25 @@ from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
 from m1n1.ane.ane_context import ReqManager, EngineReq
 from m1n1.ane.ane_utils import *
+from m1n1.ane.compiler.matmul2d import compile_matmul2d
 
 import numpy as np
 
-M = 5
-N = 8
-P = 3
+# userspace
+
+M = 5 # HOLD
+N = 9 # PARAM; 1 <= N <= 500
+P = 3 # HOLD
 src_arr1 = np.arange(M*N).reshape((M, N)).astype(np.float64)
 src_arr2 = np.arange(N*P).reshape((N, P)).astype(np.float64)
 
+ts_buf = compile_matmul2d(N)
+# open('compiled.bin', 'wb').write(ts_buf)
+ts_prop = [0x274, 0x274, 0x278, 0x278, 0x274] # TODO
+
 # ----------------------------------
 
+# init platform
 ane = ANE(u)
 ane.powerup()
 
@@ -38,25 +46,24 @@ tm.init_tqs()
 
 # ----------------------------------
 
+# tile bufs
 src_buf1 = zero_pad(ane.tiler.arr2tile(src_arr1), ane.TILE_SIZE)
 src_buf2 = zero_pad(ane.tiler.arr2tile(src_arr2), ane.TILE_SIZE)
 src_iova1 = ane.bufmngr.alloc_buf(src_buf1)
 src_iova2 = ane.bufmngr.alloc_buf(src_buf2)
 
-krn_iova = ane.bufmngr.alloc_size(0x4000) # still allocs size?
+krn_iova = ane.bufmngr.alloc_size(0x4000) # still allocs empty
 intm_buf = src_buf1 # copy of src1 that gets broadcasted
 intm_iova = ane.bufmngr.alloc_buf(intm_buf) 
 dst_iova = ane.bufmngr.alloc_size(ane.TILE_SIZE)
 
 ane.bufmngr.run_syncttbr()
-ane.bufmngr.dump_bufs()
+# ane.bufmngr.dump_bufmap()
+# ane.bufmngr.dump_bufs()
 
 # ----------------------------------
 
-# WIP
-ts_buf = open("m1n1/ane/compiler/matmul.bin", 'rb').read()
-ts_prop = [0x274, 0x274, 0x278, 0x278, 0x274]
-
+# make req
 req = EngineReq(ts_buf, ts_prop)
 ts_iova = ane.bufmngr.alloc_buf(req.ts.ts_buf)
 req.setup_BAR(dict( ts=ts_iova, krn=krn_iova, 
@@ -68,26 +75,40 @@ reqmngr.prep_nxt_req(req)
 
 # ----------------------------------
 
+# lets goooo
 def push2hw():
+    print('\n\npushing to hw...')
     (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
+
     dst_buf_prev = ane.ioread(dst_iova, ane.TILE_SIZE)
-    open('prev.bin', 'wb').write(dst_buf_prev)
     ane.get_timestamp()
 
+    # these two are the actual pushes
+    # everything else here is just sugar
     tm.enqueue_tq(req)
     tm.execute_tq(req)
 
     ane.get_timestamp()
     dst_buf_post = ane.ioread(dst_iova, ane.TILE_SIZE) # diff :)
-    open('post.bin', 'wb').write(dst_buf_post)
 
-    dst_arr = ane.tiler.tile2arr(dst_buf_post, (M, P))
     (dma_r2, dma_w2, dma_rw2) = ane.get_dma_perf_stats()
     print('perf: total: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
                                         % (dma_r2, dma_w2, dma_rw2))
     print('perf: delta: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
                                         % (dma_r2-dma_r1, dma_w2-dma_w1, 
                                            dma_rw2-dma_rw1))
+    
+    ref_arr = src_arr1 @ src_arr2
+    print('ref_arr: \n')
+    print(ref_arr, '\n\n')
+    print('drumroll pls .....')
+    dst_arr = ane.tiler.tile2arr(dst_buf_post, (M, P))
+    print('dst_arr: \n')
+    print(dst_arr, '\n\n')
+
+    print('shape eq: %r' % (dst_arr.shape == ref_arr.shape))
+    print('arr eq: %r' % (np.array_equal(dst_arr, ref_arr)))
+    print('\n')
     return dst_arr
 
 # push2hw()

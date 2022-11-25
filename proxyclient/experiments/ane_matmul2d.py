@@ -49,12 +49,12 @@ tm.init_tqs()
 # tile bufs
 src1_buf = zero_pad(ane.tiler.arr2tile(src1_arr), ane.TILE_SIZE)
 src2_buf = zero_pad(ane.tiler.arr2tile(src2_arr), ane.TILE_SIZE)
-src1_iova = ane.bufmngr.alloc_buf(src1_buf)
-src2_iova = ane.bufmngr.alloc_buf(src2_buf)
+src1_iova = ane.bufmngr.alloc_data(src1_buf)
+src2_iova = ane.bufmngr.alloc_data(src2_buf)
 
 krn_iova = ane.bufmngr.alloc_size(0x4000) # still allocs empty
 intm_buf = src1_buf # copy of src1 that gets broadcasted
-intm_iova = ane.bufmngr.alloc_buf(intm_buf) 
+intm_iova = ane.bufmngr.alloc_data(intm_buf) 
 dst_iova = ane.bufmngr.alloc_size(ane.TILE_SIZE)
 
 ane.bufmngr.run_syncttbr()
@@ -65,7 +65,7 @@ ane.bufmngr.run_syncttbr()
 
 # make req
 req = EngineReq(ts_buf, ts_prop)
-ts_iova = ane.bufmngr.alloc_buf(req.ts.ts_buf)
+ts_iova = ane.bufmngr.alloc_data(req.ts.ts_buf)
 req.setup_BAR(dict( ts=ts_iova, krn=krn_iova, 
                     intm=intm_iova, dst=dst_iova,
                     src1=src1_iova, src2=src2_iova ))

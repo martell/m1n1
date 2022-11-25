@@ -23,6 +23,8 @@ class ANEBufManager:
         self.mapid = 0
         self.map = {}
         self.dart_synced = False
+        self.alloc_size(0x4000) # for the sake of sync
+        self.run_syncttbr()
         return
 
     def alloc_data(self, data):
@@ -37,7 +39,7 @@ class ANEBufManager:
         print("mapid %d: mapped paddr 0x%x to vaddr 0x%x for data w/ size 0x%x"
               % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
         self.mapid += 1
-        return self.mapid
+        return buf.vaddr
 
     def alloc_size(self, size):
         size = roundup(size, self.ane.PAGE_SIZE)
@@ -50,15 +52,7 @@ class ANEBufManager:
         print("mapid %d: mapped paddr 0x%x to vaddr 0x%x for data w/ size 0x%x"
               % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
         self.mapid += 1
-        return self.mapid
-
-    def flush_buf(self, buf):
-        self.ane.iowrite(buf.vaddr, make_padding(buf.size))
-        return
-
-    def flush_mapid(self, mapid):
-        flush_buf(self.map[mapid])
-        return
+        return buf.vaddr
 
     def run_syncttbr(self):
         if ((self.mapid > 0) and (self.dart_synced == False)):
@@ -75,7 +69,7 @@ class ANEBufManager:
 
     def dump_bufs(self):
         outdir = os.path.join('out', datetime.now().isoformat())
-        os.makedirs(oudir, exist_ok=True)
+        os.makedirs(outdir, exist_ok=True)
         region = b''
         for mapid in self.map:
             buf = self.map[mapid]
@@ -92,74 +86,12 @@ class TaskSequence:
         # ts: only once; head of BAR in tq
         self.ts_buf = ts_buf
         self.ts_prop = ts_prop
-        self.ts_bps = [roundup(prop, 0x100) for prop in self.ts_prop]
         self.td_count = len(self.ts_prop)
-
-        # td: 0th td to populate fifo req pool
-        self.td_buf = self.ts_buf[:self.ts_prop[0]]
-        self.td_size = len(self.td_buf)
+        
+        # t0: head td that populates fifo req pool
+        self.t0_buf = self.ts_buf[:self.ts_prop[0]]
+        self.t0_size = len(self.t0_buf)
         return
-
-
-class EngineReq:
-    # hardware req struct
-    def __init__(self, ts):
-        self.ts = ts
-        self.size = self.ts.td_size
-        self.td_count = self.ts.td_count
-        self.vaddr = None
-        self.nid = None
-        self.bar = None
-        # self.prty = None # optional
-        return
-
-    def setup_BAR(self, mapid_dict):
-        self.bar = BAR()
-        for key in mapid_dict:
-            setattr(self.bar, key, bardict[key])
-        return
-
-
-class ReqManager:
-
-    REQ_FIFO_COUNT = 0x20
-
-    def __init__(self, ane):
-        self.ane = ane
-        self.bufmngr = ane.bufmngr
-        self.req_iova_base = None
-        self.req_width = None
-        return
-
-    def set_nid_in_buf(self, td_buf, new_nid):
-        assert ((new_nid > 0) and (new_nid < 0xff))
-        hdr0 = TD_HDR0(struct.unpack('<L', td_buf[:4])[0])
-        hdr0.NID = new_nid
-        return struct.pack('<L', hdr0._value) + td_buf[4:]
-
-    def init_req_fifo(self, cur_req):
-        self.req_width = nextpow2(cur_req.size)
-        self.req_iova_base = self.bufmngr.alloc_size(
-            self.REQ_FIFO_COUNT * self.req_width)
-        return
-
-    def prep_nxt_req(self, cur_req, cur_nid=0x14):
-        assert ((self.req_iova_base != None) and (self.req_width != None))
-        assert ((cur_nid > 0) and (cur_nid < 0xff))
-        nxt_nid = cur_nid + self.REQ_FIFO_COUNT
-        assert ((nxt_nid > 0) and (nxt_nid < 0xff))
-
-        cur_req.nid = cur_nid
-        cur_td_buf = self.set_nid_in_buf(cur_req.ts.td_buf, cur_nid)
-        nxt_td_buf = self.set_nid_in_buf(cur_req.ts.td_buf, nxt_nid)
-        print('cur_nid: 0x%x, nxt_nid: 0x%x' % (cur_nid, nxt_nid))
-
-        req_idx = 0  # TODO
-        cur_req.iova = self.req_iova_base + req_idx*self.req_width
-        nxt_req_iova = cur_req.iova + self.req_width
-        self.ane.iowrite(cur_req.iova, cur_td_buf)
-        self.ane.iowrite(nxt_req_iova, nxt_td_buf)
-        return cur_req
 
 
 class BAR:
@@ -200,3 +132,94 @@ class BAR:
 
     def get_table(self):
         return list(vars(self).values())
+
+
+@dataclass 
+class EngineReq: # hardware req struct
+    td_buf: bytes # for fifo
+    td_size: int 
+    td_count: int
+    vaddr: int = 0
+    nid: int = 0
+    bar: BAR = BAR()
+
+
+class ReqManager:
+
+    FIFO_COUNT = 0x20
+
+    def __init__(self, ane):
+        self.ane = ane
+        self.req = None
+        self.fifo_width = None
+        self.fifo_base = None
+        self.fifo_idx = 0
+        return
+    
+    def init_req(self, ts):
+        self.req = EngineReq(td_buf=ts.t0_buf, 
+                            td_size=ts.t0_size, td_count=ts.td_count)
+        # alloc fifo region
+        self.fifo_width = nextpow2(self.req.td_size)
+        self.fifo_base = self.ane.bufmngr.alloc_size(
+            self.FIFO_COUNT * self.fifo_width)
+        
+        self.setup_ts(ts.ts_buf)
+        return
+
+    def assign_nid(self):
+        # TODO schedule from fifo availability
+        # rn just gives any 0 < x < 0xff - FIFO_COUNT
+        return 0x23 
+
+    def set_nid_in_td_buf(self, td_buf, new_nid):
+        assert ((new_nid > 0) and (new_nid < 0xff))
+        hdr0 = TD_HDR0(struct.unpack('<L', td_buf[:4])[0])
+        hdr0.NID = new_nid
+        return struct.pack('<L', hdr0._value) + td_buf[4:]
+
+    def make_fifo_head(self):
+        assert ((self.fifo_base != None) and (self.fifo_width != None))
+        
+        cur_nid = self.assign_nid()
+        assert ((cur_nid > 0) and (cur_nid < 0xff))
+        nxt_nid = cur_nid + self.FIFO_COUNT
+        assert ((nxt_nid > 0) and (nxt_nid < 0xff))
+        self.req.nid = cur_nid
+
+        cur_td_buf = self.set_nid_in_td_buf(self.req.td_buf, cur_nid)
+        nxt_td_buf = self.set_nid_in_td_buf(self.req.td_buf, nxt_nid)
+        print('cur_nid: 0x%x, nxt_nid: 0x%x' % (cur_nid, nxt_nid))
+
+        self.req.vaddr = self.fifo_base + self.fifo_idx*self.fifo_width
+        nxt_req_iova = self.req.vaddr + self.fifo_width
+        self.ane.iowrite(self.req.vaddr, cur_td_buf)
+        self.ane.iowrite(nxt_req_iova, nxt_td_buf) # necessary?
+        return
+
+    def setup_ts(self, ts_buf):
+        self.req.bar.ts = self.ane.bufmngr.alloc_data(ts_buf)
+        return
+
+    def setup_src1(self, src1_buf):
+        assert(not len(src1_buf) % self.ane.TILE_SIZE)
+        self.req.bar.src1 = self.ane.bufmngr.alloc_data(src1_buf)
+        return
+
+    def setup_src2(self, src2_buf):
+        assert(not len(src2_buf) % self.ane.TILE_SIZE)
+        self.req.bar.src2 = self.ane.bufmngr.alloc_data(src2_buf)
+        return
+
+    def setup_krn(self, krn_buf):
+        self.req.bar.krn = self.ane.bufmngr.alloc_data(krn_buf)
+        return
+
+    def setup_intm(self, intm_buf):
+        self.req.bar.intm = self.ane.bufmngr.alloc_data(intm_buf)
+        return
+
+    def setup_dst(self, dst_buf):
+        assert(not len(dst_buf) % self.ane.TILE_SIZE)
+        self.req.bar.dst = self.ane.bufmngr.alloc_data(dst_buf)
+        return

@@ -10,26 +10,26 @@ import numpy as np
 
 from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
-from m1n1.ane.ane_td import Task, set_nid_in_buf
+from m1n1.ane.ane_context import ReqManager, EngineReq
 from m1n1.ane.ane_utils import *
-from m1n1.ane.compiler.elemwise import elemwise_transform
+from m1n1.ane.compiler.elemwise1d import compile_elemwise1d
+
 
 """
-1D element-wise ADD/MULTIPLY/MAX/MIN
+1D element-wise ADD/MUL/MIN/MAX
 
 input1: (M,)
 input2: (M,)
 output: (M,)
+where 1 <= M <= 4000 // got bored after lol
 
-1 <= M <= 4000 // got bored after lol
 """
 
-DBG_CFG_REGMON_ON = 1
-DBG_CFG_SHELL_RUN = 1
-
+# init platform
 ane = ANE(u)
 ane.powerup()
 
+DBG_CFG_REGMON_ON = 1
 if DBG_CFG_REGMON_ON:
     rnges = [(0x26b900000, 0x26b90c1fc, 'perf'),
             (0x26bc04000, 0x26bc28000, 'ane'),]
@@ -41,55 +41,44 @@ if DBG_CFG_REGMON_ON:
 tm = TaskManager(ane, 0x26bc00000) # TODO other boards ?
 tm.init_tqs()
 
-if DBG_CFG_REGMON_ON:
-    mon.poll()
+reqmngr = ReqManager(ane)
 
 # ---------------------------------------------
 
-ane.init_vmem_region()
 
-# mem management is nonexistent rn
-# similar to what macos allocs:
-td_iova = 0x1fc0000
-krn_iova = 0x1fc0280 # written in BAR regardless
-req_iova_base = 0x1fcc000 # fifo
-src_iova1 = 0x1fdc000
-src_iova2 = 0x1fe4000
-dst_iova = 0x1fec000
+def prep_input(src_arr1, src_arr2):
+    assert(src_arr1.shape == src_arr2.shape)
+    M = len(src_arr1)
 
-# ---------------------------------------------
+    # compile
+    ts_buf = compile_elemwise1d(M)
+    # open('compiled.bin', 'wb').write(ts_buf)
+    ts_prop = [len(ts_buf)] # non-chained, so only 1
 
-def push2hw(td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
-    """
-    push to hw after bufs are written
-    """
-    td_size = len(td_buf) # 0x274
-    req_width = nextpow2(td_size) # 0x400
-
-    assert((cur_nid > 0) and (cur_nid < 0xff))
-    # TODO: calculate from hdr nxt offset
-    nxt_nid = cur_nid + 0x20
-    assert((nxt_nid > 0) and (nxt_nid < 0xff))
-    cur_td_buf = set_nid_in_buf(td_buf, cur_nid)
-    nxt_td_buf = set_nid_in_buf(td_buf, nxt_nid)
-    print('cur_nid: 0x%x, nxt_nid: 0x%x' % (cur_nid, nxt_nid))
-
-    cur_req_iova = req_iova_base + req_idx*req_width
-    nxt_req_iova = cur_req_iova + req_width
-    ane.iowrite(cur_req_iova, cur_td_buf)
-    ane.iowrite(nxt_req_iova, nxt_td_buf)
-
-    task = Task(nid=cur_nid, req_iova=cur_req_iova, size=td_size)
-    task.setup_BAR(dict(p_head=td_iova, p_krn=krn_iova, 
-                        p_dst=dst_iova, p_src1=src_iova1, p_src2=src_iova2))
+    # tile bufs
+    src_buf1 = zero_pad(ane.tiler.arr2tile(src_arr1), ane.TILE_SIZE)
+    src_buf2 = zero_pad(ane.tiler.arr2tile(src_arr2), ane.TILE_SIZE)
+    src1_bufid = ane.bufmngr.alloc_buf(src_buf1)
+    src_iova2 = ane.bufmngr.alloc_buf(src_buf2)
     
-    # dst_buf_prev = ane.ioread(dst_iova, ane.TILE_SIZE)
-    ane.get_timestamp()
-    tm.enqueue_tq(task, queue_id=queue_id)
-    tm.execute_tq()
-    ane.get_timestamp()
-    # dst_buf_post = ane.ioread(dst_iova, ane.TILE_SIZE) # diff :)
+    krn_iova = ane.bufmngr.alloc_size(0x4000) # still allocs empty
+    intm_iova = 0 # none
+    dst_iova = ane.bufmngr.alloc_size(ane.TILE_SIZE)
+    ane.bufmngr.run_syncttbr()
+    # ane.bufmngr.dump_bufmap()
+    # ane.bufmngr.dump_bufs()
+
+    # make req
+    req = EngineReq(ts_buf, ts_prop)
+    ts_iova = ane.bufmngr.alloc_buf(req.ts.ts_buf)
+    req.setup_BAR(dict( ts=ts_iova, krn=krn_iova, 
+                        intm=intm_iova, dst=dst_iova,
+                        src1=src_iova1, src2=src_iova2 ))
+
+    
+    reqmngr.prep_nxt_req(req)
     return
+
 
 # ---------------------------------------------
 

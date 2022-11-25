@@ -3,65 +3,86 @@
 import os
 import struct
 from datetime import datetime
+from dataclasses import dataclass
 
 from m1n1.hw.ane import TD_HDR0
 from m1n1.ane.ane_utils import roundup, nextpow2
+from m1n1.ane.ane_utils import make_padding
 
+
+@dataclass
+class Buffer:
+    mapid: int
+    paddr: int
+    vaddr: int
+    size: int
 
 class ANEBufManager:
     def __init__(self, ane):
         self.ane = ane
-        self.bufid = 0
-        self.bufmap = {}
+        self.mapid = 0
+        self.map = {}
         self.dart_synced = False
         return
 
-    def alloc_buf(self, buf):
-        size = roundup(len(buf), self.ane.PAGE_SIZE)
+    def alloc_data(self, data):
+        size = roundup(len(data), self.ane.PAGE_SIZE)
         paddr = self.ane.u.memalign(self.ane.PAGE_SIZE, size)
         self.ane.p.memset32(paddr, 0, size)
-        iova = self.ane.dart.iomap(0, paddr, size)
-        self.ane.iowrite(iova, buf)
-        print("bufid %d: mapped paddr 0x%x to iova 0x%x for buf size 0x%x"
-              % (self.bufid, paddr, iova, size))
-        self.bufmap[self.bufid] = (paddr, iova, size)
-        self.bufid += 1
-        return iova
+        vaddr = self.ane.dart.iomap(0, paddr, size)
+        self.ane.iowrite(vaddr, data)
+        
+        buf = Buffer(self.mapid, paddr, vaddr, size)
+        self.map[self.mapid] = buf
+        print("mapid %d: mapped paddr 0x%x to vaddr 0x%x for data w/ size 0x%x"
+              % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
+        self.mapid += 1
+        return self.mapid
 
     def alloc_size(self, size):
         size = roundup(size, self.ane.PAGE_SIZE)
         paddr = self.ane.u.memalign(self.ane.PAGE_SIZE, size)
         self.ane.p.memset32(paddr, 0, size)
-        iova = self.ane.dart.iomap(0, paddr, size)
-        print("bufid %d: mapped paddr 0x%x to iova 0x%x for size 0x%x"
-              % (self.bufid, paddr, iova, size))
-        self.bufmap[self.bufid] = (paddr, iova, size)
-        self.bufid += 1
-        return iova
+        vaddr = self.ane.dart.iomap(0, paddr, size)
+        
+        buf = Buffer(self.mapid, paddr, vaddr, size)
+        self.map[self.mapid] = buf
+        print("mapid %d: mapped paddr 0x%x to vaddr 0x%x for data w/ size 0x%x"
+              % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
+        self.mapid += 1
+        return self.mapid
+
+    def flush_buf(self, buf):
+        self.ane.iowrite(buf.vaddr, make_padding(buf.size))
+        return
+
+    def flush_mapid(self, mapid):
+        flush_buf(self.map[mapid])
+        return
 
     def run_syncttbr(self):
-        if ((self.bufid > 0) and (self.dart_synced == False)):
+        if ((self.mapid > 0) and (self.dart_synced == False)):
             self.ane.syncttbr()
             self.dart_synced = True
         return
 
-    def dump_bufmap(self):
-        for bufid in self.bufmap:
-            (paddr, iova, size) = self.bufmap[bufid]
-            print('bufid %d: paddr 0x%x, iova 0x%x, size 0x%x'
-                  % (bufid, paddr, iova, size))
+    def dump_map(self):
+        for mapid in self.map:
+            buf = self.map[mapid]
+            print('mapid %d: paddr 0x%x, vaddr 0x%x, size 0x%x'
+                  % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
         return
 
     def dump_bufs(self):
-        oudir = os.path.join('out', datetime.now().isoformat())
+        outdir = os.path.join('out', datetime.now().isoformat())
         os.makedirs(oudir, exist_ok=True)
         region = b''
-        for bufid in self.bufmap:
-            (paddr, iova, size) = self.bufmap[bufid]
-            data = self.ane.ioread(iova, size)
-            open(os.path.join(oudir, '0x%x.bin' % iova), 'wb').write(data)
+        for mapid in self.map:
+            buf = self.map[mapid]
+            data = self.ane.ioread(buf.vaddr, buf.size)
+            open(os.path.join(outdir, '0x%x.bin' % buf.vaddr), 'wb').write(data)
             region += data
-        open(os.path.join(oudir, 'region.bin'), 'wb').write(region)
+        open(os.path.join(outdir, 'region.bin'), 'wb').write(region)
         return len(region)
 
 
@@ -82,19 +103,19 @@ class TaskSequence:
 
 class EngineReq:
     # hardware req struct
-    def __init__(self, ts_buf, ts_prop):
-        self.ts = TaskSequence(ts_buf, ts_prop)
+    def __init__(self, ts):
+        self.ts = ts
         self.size = self.ts.td_size
         self.td_count = self.ts.td_count
-        self.iova = None
+        self.vaddr = None
         self.nid = None
         self.bar = None
         # self.prty = None # optional
         return
 
-    def setup_BAR(self, bardict):
+    def setup_BAR(self, mapid_dict):
         self.bar = BAR()
-        for key in bardict:
+        for key in mapid_dict:
             setattr(self.bar, key, bardict[key])
         return
 
@@ -103,13 +124,11 @@ class ReqManager:
 
     REQ_FIFO_COUNT = 0x20
 
-    def __init__(self, ane, req=None):
+    def __init__(self, ane):
         self.ane = ane
         self.bufmngr = ane.bufmngr
         self.req_iova_base = None
         self.req_width = None
-        if (req != None):
-            self.init_req_fifo(req)
         return
 
     def set_nid_in_buf(self, td_buf, new_nid):

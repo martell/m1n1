@@ -7,10 +7,10 @@ class R_TQINFO(Register32):
     NID = 15, 0
 
 class TaskQueue(RegMap):
-    STATUS     = irange(0x0, 8, 0x148),  Register32
+    STATUS     = irange(0x00, 8, 0x148), Register32
     PRTY       = irange(0x10, 8, 0x148), Register32
     FREE_SPACE = irange(0x14, 8, 0x148), Register32
-    TQINFO     = irange(0x14, 8, 0x148), R_TQINFO
+    TQINFO     = irange(0x1c, 8, 0x148), R_TQINFO
 
     BAR1 = (irange(0x20, 8, 0x148), irange(0x0, 0x20, 4)), Register32
     REQ_NID1  = irange(0xa0, 8, 0x148), Register32
@@ -23,16 +23,19 @@ class TaskQueue(RegMap):
     REQ_ADDR1 = irange(0x134, 8, 0x148), Register32
 
 
+class R_REQINFO(Register32): 
+    TDSIZE  = 31, 16
+    TDCOUNT = 15,  0
+
 class R_IRQINFO(Register32): 
     CNT  = 31, 24
     NID  = 23, 16
     UNK1 = 15, 8
     UNK2 = 7,  0
 
-
 class TMRegs(RegMap): 
     REQ_ADDR = 0x0, Register32
-    REQ_INFO = 0x4, Register32
+    REQ_INFO = 0x4, R_REQINFO
     REQ_PUSH = 0x8, Register32
     TQ_EN    = 0xc, Register32
 

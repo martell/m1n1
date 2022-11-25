@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 import numpy as np
+from m1n1.ane.ane_utils import ez_pack
 
 def get_conv2d_dims(
             filters=1, kernel_size=1, stride=1, 
@@ -16,7 +17,8 @@ def get_conv2d_dims(
     output_dim = (batch_size, filters, out_spatial_size, out_spatial_size)
     return input_dim, weight_dim, output_dim
 
-def conv2d_transform(input_size, input_channels=5):
+
+def compile_conv2d(input_size, input_channels=5):
     base = np.array(
       [0x2000000, 0x0, 0x422, 0x0, 0xfff86a, 0x0, 0x30009800, 0x0,
        0x1024025, 0x21, 0xf401f800, 0x40, 0x0, 0x81, 0x80, 0x80, 0x80,
@@ -36,8 +38,7 @@ def conv2d_transform(input_size, input_channels=5):
        0x80, 0x80, 0x1302031])
     
     base = conv2d_t(base, input_size, input_channels)
-    base = list(base)
-    return base 
+    return ez_pack(list(base))
 
 
 

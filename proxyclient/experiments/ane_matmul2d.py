@@ -19,8 +19,8 @@ import numpy as np
 M = 5 # HOLD
 N = 9 # PARAM; 1 <= N <= 500
 P = 3 # HOLD
-src_arr1 = np.arange(M*N).reshape((M, N)).astype(np.float64)
-src_arr2 = np.arange(N*P).reshape((N, P)).astype(np.float64)
+src1_arr = np.arange(M*N).reshape((M, N)).astype(np.float64)
+src2_arr = np.arange(N*P).reshape((N, P)).astype(np.float64)
 
 ts_buf = compile_matmul2d(N)
 # open('compiled.bin', 'wb').write(ts_buf)
@@ -47,13 +47,13 @@ tm.init_tqs()
 # ----------------------------------
 
 # tile bufs
-src_buf1 = zero_pad(ane.tiler.arr2tile(src_arr1), ane.TILE_SIZE)
-src_buf2 = zero_pad(ane.tiler.arr2tile(src_arr2), ane.TILE_SIZE)
-src_iova1 = ane.bufmngr.alloc_buf(src_buf1)
-src_iova2 = ane.bufmngr.alloc_buf(src_buf2)
+src1_buf = zero_pad(ane.tiler.arr2tile(src1_arr), ane.TILE_SIZE)
+src2_buf = zero_pad(ane.tiler.arr2tile(src2_arr), ane.TILE_SIZE)
+src1_iova = ane.bufmngr.alloc_buf(src1_buf)
+src2_iova = ane.bufmngr.alloc_buf(src2_buf)
 
 krn_iova = ane.bufmngr.alloc_size(0x4000) # still allocs empty
-intm_buf = src_buf1 # copy of src1 that gets broadcasted
+intm_buf = src1_buf # copy of src1 that gets broadcasted
 intm_iova = ane.bufmngr.alloc_buf(intm_buf) 
 dst_iova = ane.bufmngr.alloc_size(ane.TILE_SIZE)
 
@@ -68,7 +68,7 @@ req = EngineReq(ts_buf, ts_prop)
 ts_iova = ane.bufmngr.alloc_buf(req.ts.ts_buf)
 req.setup_BAR(dict( ts=ts_iova, krn=krn_iova, 
                     intm=intm_iova, dst=dst_iova,
-                    src1=src_iova1, src2=src_iova2 ))
+                    src1=src1_iova, src2=src2_iova ))
 
 reqmngr = ReqManager(ane, req)
 reqmngr.prep_nxt_req(req)
@@ -98,7 +98,7 @@ def push2hw():
                                         % (dma_r2-dma_r1, dma_w2-dma_w1, 
                                            dma_rw2-dma_rw1))
     
-    ref_arr = src_arr1 @ src_arr2
+    ref_arr = src1_arr @ src2_arr
     print('ref_arr: \n')
     print(ref_arr, '\n\n')
     print('drumroll pls .....')

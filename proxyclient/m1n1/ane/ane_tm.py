@@ -43,6 +43,7 @@ class TaskManager:
         print('enqueueing task w/ nid 0x%x @ 0x%x to tq %d'
               % (req.nid, req.vaddr, queue_id))
         self.tq.STATUS[queue_id].val = 0x1  # in use
+        # self.tq.TDCOUNT[queue_id].val = req.td_count  # added 
 
         for bar_idx, bar_val in enumerate(req.bar.get_table()):
             self.tq.BAR1[queue_id, bar_idx].val = bar_val
@@ -82,9 +83,10 @@ class TaskManager:
         # cp to main queue in (TM rnge)
         self.regs.REQ_ADDR.val = self.tq.REQ_ADDR1[queue_id].val
 
-        # TODO find slot for td count in req
         # if 0 req doesnt go through
         self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | req.td_count
+        # self.regs.REQ_INFO.val = self.tq.REQ_SIZE1[queue_id].val | self.tq.TDCOUNT[queue_id].val
+        # self.regs.REQ_INFO.TDCOUNT = req.td_count
 
         # this write actually triggers the circuit
         # so main queue can be adjusted before this

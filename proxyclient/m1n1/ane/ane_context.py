@@ -6,8 +6,7 @@ from datetime import datetime
 from dataclasses import dataclass
 
 from m1n1.hw.ane import TD_HDR0
-from m1n1.ane.ane_utils import roundup, nextpow2
-from m1n1.ane.ane_utils import make_padding
+from m1n1.ane.ane_utils import roundup, nextpow2, make_padding
 
 
 @dataclass
@@ -216,6 +215,7 @@ class ReqManager:
         return
 
     def setup_intm(self, intm_buf):
+        if (intm_buf == None): return
         self.req.bar.intm = self.ane.bufmngr.alloc_data(intm_buf)
         return
 

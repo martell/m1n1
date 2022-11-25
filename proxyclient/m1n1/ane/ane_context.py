@@ -206,6 +206,7 @@ class ReqManager:
         return
 
     def setup_src2(self, src2_buf):
+        if (src2_buf == None): return
         assert(not len(src2_buf) % self.ane.TILE_SIZE)
         self.req.bar.src2 = self.ane.bufmngr.alloc_data(src2_buf)
         return

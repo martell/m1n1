@@ -10,36 +10,16 @@ import numpy as np
 
 from m1n1.ane import ANE
 from m1n1.ane.ane_tm import TaskManager
-from m1n1.ane.ane_td import Task, set_nid_in_buf
-from m1n1.ane.ane_utils import *
-from m1n1.ane.compiler.conv2d import get_conv2d_dims, conv2d_transform
+from m1n1.ane.ane_context import TaskSequence, ReqManager
+from m1n1.ane.ane_utils import zero_pad, make_padding
+from m1n1.ane.compiler.conv2d import get_conv2d_dims, compile_conv2d
 
 
-"""
-simple 2D NCHW convolution
-
-AVAILABLE PARAMS: 
-input_size: 
-    - aka H/W of NCHW
-    - td transform verified for 1 <= x <= 1000
-    - however tile overflows @ 32, causing 
-      dma interleave into 2 separate tiles, which
-      i havent figured out yet
-    - so hard cap 1 <= input_size <= 32
-    - .. also C == 5 & N == 1 until further notice 
-
-alpha, beta:
-    - populates src, krn respectively
-    - haven't tested for non-uniform mats
-
-"""
-
-DBG_CFG_REGMON_ON = 1
-DBG_CFG_SHELL_RUN = 1
-
+# init platform
 ane = ANE(u)
 ane.powerup()
 
+DBG_CFG_REGMON_ON = 1
 if DBG_CFG_REGMON_ON:
     rnges = [(0x26b900000, 0x26b90c1fc, 'perf'),
             (0x26bc04000, 0x26bc28000, 'ane'),]
@@ -51,91 +31,69 @@ if DBG_CFG_REGMON_ON:
 tm = TaskManager(ane, 0x26bc00000) # TODO other boards ?
 tm.init_tqs()
 
-if DBG_CFG_REGMON_ON:
-    mon.poll()
+# ----------------------------------
 
-# ---------------------------------------------
+reqmngr = ReqManager(ane)
 
-ane.init_vmem_region()
+def prep_bufs(src1_arr, krn_arr):
+    src1_buf = zero_pad(ane.tiler.arr2tile(src1_arr), ane.TILE_SIZE)
+    reqmngr.setup_src1(src1_buf)
 
-# mem management is nonexistent rn
-# similar to what macos allocs:
-td_iova = 0x1fc0000
-krn_iova = 0x1fc0280 # written in BAR regardless
-req_iova_base = 0x1fc8000 # fifo
-src_iova = 0x1fd8000 
-dst_iova = 0x1fe0000 # 0x1fe4000 if src tile overflow
+    src2_buf = None
+    reqmngr.setup_src2(src2_buf)
 
-# ---------------------------------------------
+    krn_buf = ane.tiler.arr2krn(krn_arr)
+    reqmngr.setup_krn(krn_buf)
 
-def push2hw(td_buf, req_idx=0, cur_nid=0x15, queue_id=4):
-    """
-    push to hw after bufs are written
-    """
-    td_size = len(td_buf) # 0x274
-    req_width = nextpow2(td_size) # 0x400
+    intm_buf = None
+    reqmngr.setup_intm(intm_buf)
 
-    assert((cur_nid > 0) and (cur_nid < 0xff))
-    # TODO: calculate from hdr nxt offset
-    nxt_nid = cur_nid + 0x20
-    assert((nxt_nid > 0) and (nxt_nid < 0xff))
-    cur_td_buf = set_nid_in_buf(td_buf, cur_nid)
-    nxt_td_buf = set_nid_in_buf(td_buf, nxt_nid)
-    print('cur_nid: 0x%x, nxt_nid: 0x%x' % (cur_nid, nxt_nid))
-
-    cur_req_iova = req_iova_base + req_idx*req_width
-    nxt_req_iova = cur_req_iova + req_width
-    ane.iowrite(cur_req_iova, cur_td_buf)
-    ane.iowrite(nxt_req_iova, nxt_td_buf)
-
-    task = Task(nid=cur_nid, req_iova=cur_req_iova, size=td_size)
-    task.setup_BAR(dict(p_head=td_iova, p_krn=krn_iova, 
-                        p_dst=dst_iova, p_src1=src_iova))
-    
-    # dst_buf_prev = ane.ioread(dst_iova, ane.TILE_SIZE)
-    ane.get_timestamp()
-    tm.enqueue_tq(task, queue_id=queue_id)
-    tm.execute_tq()
-    ane.get_timestamp()
-    # dst_buf_post = ane.ioread(dst_iova, ane.TILE_SIZE) # diff :)
+    dst_buf = make_padding(ane.TILE_SIZE)
+    reqmngr.setup_dst(dst_buf)
     return
 
-# ---------------------------------------------
 
-def main(input_size, alpha, beta, 
-            req_idx=0, cur_nid=0x15, queue_id=4):
+def push2hw(req):
+    print('pushing to hw...')
     (dma_r1, dma_w1, dma_rw1) = ane.get_dma_perf_stats()
+    ane.get_timestamp()
 
-    input_dim, weight_dim, output_dim = get_conv2d_dims(input_size=input_size)
-    td_buf = ez_pack(conv2d_transform(input_size))
-    ane.iowrite(td_iova, td_buf)
-    
-    src_arr = np.zeros(input_dim) + alpha
-    src_buf = zero_pad(ane.tiler.arr2tile(src_arr), ane.TILE_SIZE)
-    ane.iowrite(src_iova, src_buf)
+    tm.enqueue_tq(req)
+    tm.execute_tq(req)
 
-    krn_arr = np.zeros(weight_dim) + beta
-    krn_buf = zero_pad(ane.tiler.arr2krn(krn_arr), 0x40) # TODO derive 
-    ane.iowrite(krn_iova, krn_buf)
-
-    # lets gooo
-    push2hw(td_buf, req_idx, cur_nid, queue_id)
-    dst_buf = ane.ioread(dst_iova, ane.TILE_SIZE)
-    dst_arr = ane.tiler.tile2arr(dst_buf, output_dim)
-    print(dst_arr)
-
+    ane.get_timestamp()
     (dma_r2, dma_w2, dma_rw2) = ane.get_dma_perf_stats()
     print('perf: total: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
                                         % (dma_r2, dma_w2, dma_rw2))
     print('perf: delta: dma_r: 0x%x, dma_w: 0x%x, dma_rw: 0x%x' 
-                                        % (dma_r2-dma_r1, dma_w2-dma_w1, dma_rw2-dma_rw1))
+                                        % (dma_r2-dma_r1, dma_w2-dma_w1, 
+                                           dma_rw2-dma_rw1))
+
+    dst_buf = ane.ioread(req.bar.dst, ane.TILE_SIZE)
+    return dst_buf
+
+
+def main(src_arr, krn_arr, output_dim):
+    N, C, H, W = src_arr.shape
+    ts_buf = compile_conv2d(H)
+    ts_prop = [len(ts_buf)]
+    ts = TaskSequence(ts_buf, ts_prop)
+
+    reqmngr.init_req(ts)
+    prep_bufs(src_arr, krn_arr)
+    reqmngr.make_fifo_head() # push fifo
+    dst_buf = push2hw(reqmngr.req)
+
+    dst_arr = ane.tiler.tile2arr(dst_buf, output_dim)
+    print('dst_arr: \n')
+    print(dst_arr, '\n\n')
     return dst_arr
 
 
-dst_arr = main(input_size=1, alpha=0.2897341, beta=0.1439872, queue_id=np.random.randint(1, 7))
-dst_arr = main(input_size=32, alpha=3.141592, beta=2022.12345, queue_id=np.random.randint(1, 7))
+H = 32
+input_dim, weight_dim, output_dim = get_conv2d_dims(input_size=H)
+src_arr = np.zeros(input_dim) + 3.1415
+krn_arr = np.zeros(weight_dim) + 6.626
+dst_arr = main(src_arr, krn_arr, output_dim)
 
-
-if DBG_CFG_SHELL_RUN:
-    run_shell(globals(), msg="Have fun!")
-
+run_shell(globals(), msg="Have fun!")

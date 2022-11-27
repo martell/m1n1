@@ -34,7 +34,6 @@ tm.init_tqs()
 # ----------------------------------
 
 reqmngr = ReqManager(ane)
-reqmngr.init_req(ts)
 
 def prep_bufs(src1_arr, src2_arr):
     src1_buf = zero_pad(ane.tiler.arr2tile(src1_arr), ane.TILE_SIZE)
@@ -52,10 +51,6 @@ def prep_bufs(src1_arr, src2_arr):
     dst_buf = make_padding(ane.TILE_SIZE)
     reqmngr.setup_dst(dst_buf)
     return
-
-prep_bufs(src1_arr, src2_arr)
-reqmngr.make_fifo_head() # push fifo
-
 
 def push2hw(req):
     print('pushing to hw...')
@@ -77,13 +72,13 @@ def push2hw(req):
     return dst_buf
 
 
-def main(src1_arr, src2_arr, N, dst_shape):
-    ts_buf = compile_matmul2d(N)
+def main(src1_arr, src2_arr, compiler_args, dst_shape):
+    ts_buf = compile_matmul2d(*compiler_args)
     ts_prop = [0x274, 0x274, 0x278, 0x278, 0x274] # TODO
     ts = TaskSequence(ts_buf, ts_prop)
 
     reqmngr.init_req(ts)
-    prep_bufs(src_arr, krn_arr)
+    prep_bufs(src1_arr, src2_arr)
     reqmngr.make_fifo_head() # push fifo
     dst_buf = push2hw(reqmngr.req)
 
@@ -99,11 +94,10 @@ def main(src1_arr, src2_arr, N, dst_shape):
 
 
 M = 5 # HOLD
-N = 8 # 1 <= N <= 500
-P = 3 # HOLD
-src1_arr = np.arange(M * N).reshape((M, N)).astype(np.float64)
-src2_arr = np.arange(N * P).reshape((N, P)).astype(np.float64)
-main(src1_arr, src2_arr, N, (M, P))
-
-
+N = 32 # 1 <= N <= 1024
+P = 16 # 1 <= P <= 16 # trails off weird past 16
+src1_arr = np.random.rand(M*N).reshape((M, N)).astype(np.float64)
+src2_arr = np.random.rand(N*P).reshape((N, P)).astype(np.float64)
+main(src1_arr, src2_arr, (N, P), (M, P))
 run_shell(globals(), msg="Have fun!")
+

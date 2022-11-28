@@ -22,6 +22,7 @@ def compile_matmul2d(x, y):
     base = list(base)
     return ez_pack(base)
 
+
 transform_map = {
     0x128: lambda x, y: 0x10000 | x,
     0x13c: lambda x, y: 0x10000 | x,
@@ -57,7 +58,6 @@ transform_map = {
     
     0x4e8: lambda x, y: (((y-1)//8) + 1)*0x10*x,
     0x4f0: lambda x, y: 0x20,
-
     0x4f4: lambda x, y: min((((y-1)//8)+1)*0x10, 0x80),
     0x4f8: lambda x, y: min((((y-1)//8)+1)*0x10, 0x80),
     0x4ec: lambda x, y: min((((y-1)//8)+1)*0x10, 0x80),
@@ -97,7 +97,6 @@ transform_map = {
     0xa40: lambda x, y: 0x10000 | y,
     
     0xaec: lambda x, y: func_0xaec(x, y),
-
     0xaf0: lambda x, y: (((y-1)//8)+1)*0x10,
     0xaf4: lambda x, y: (((y-1)//8) + 1)*0x10,
     0xaf8: lambda x, y: (((y-1)//8) + 1)*0x10,
@@ -145,4 +144,3 @@ def func_0xaec(x, y):
 def func_0xd5c(y):
     if (((y-1)//0x20) & 1): return 0x4011101
     return 0x4021101
-

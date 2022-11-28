@@ -43,7 +43,7 @@ class ANE:
         self.tiler = ANETiler()  # static
         return
 
-    def apply_static_pmgr_tunables(self):
+    def apply_static_tunables(self):
         # this cost me a solid week
         static_tunables_map = [
             (0x0, 0x10), (0x38, 0x50020), (0x3c, 0xa0030),

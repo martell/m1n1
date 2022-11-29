@@ -28,7 +28,7 @@ if DBG_CFG_REGMON_ON:
         mon.add(start, end-start, name=name)
     mon.poll() # should work after ane.powerup()
 
-tm = TaskManager(ane, 0x26bc00000) # TODO other boards ?
+tm = TaskManager(ane)
 tm.init_tqs()
 
 # ----------------------------------

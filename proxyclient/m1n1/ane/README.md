@@ -1,7 +1,6 @@
 
 # ANE
 
-
 ## Introduction
 
 From Apple themselves,
@@ -20,6 +19,42 @@ It is just a MADD unit at its core, but
 using its vast configuration registers, 
 which span the entire 0x4000 - 0x20000 range,
 it can be configured/programmed to do many cool and exotic ops.
+
+
+
+## Devices
+
+Aka HW board types
+
+
+| Marketing name                      | Product | SoC   | ane device          | ane type |
+|-------------------------------------|---------|-------|---------------------|----------|
+| Mac mini (M1, 2020)                 | J274AP  | T8103 | ane                 | 64       |
+| MacBook Pro (13-inch, M1, 2020)     | J293AP  | T8103 | ane                 | 64       |
+| MacBook Air (M1, 2020)              | J313AP  | T8103 | ane                 | 64       |
+| iMac (24-inch (4-port), M1, 2021)   | J456AP  | T8103 | ane                 | 64       |
+| iMac (24-inch (2-port), M1, 2021)   | J457AP  | T8103 | ane                 | 64       |
+| MacBook Pro (16-inch, M1 Pro, 2021) | J316sAP | T6000 | ane0                | 96       |
+| MacBook Pro (16-inch, M1 Max, 2021) | J316cAP | T6001 | ane0,ane1           | 96       |
+| MacBook Pro (14-inch, M1 Pro, 2021) | J314sAP | T6000 | ane0                | 96       |
+| MacBook Pro (14-inch, M1 Max, 2021) | J314cAP | T6001 | ane0,ane1           | 96       |
+| Mac Studio (M1 Max, 2022)           | J375cAP | T6001 | ane0,ane1           | 96       |
+| Mac Studio (M1 Ultra, 2022)         | J375dAP | T6002 | ane0,ane1,ane2,ane3 | 96       |
+| MacBook Pro (13-inch, M2, 2022)     | J493AP  | T8112 | ane                 | 128      |
+| MacBook Air (M2, 2022)              | J413AP  | T8112 | ane                 | 128      |
+
+
+| codename | firmware                   | dt (type) | mmio base    | pmu base + size       |
+|----------|----------------------------|-----------|--------------|-----------------------|
+| styx     | h13\_ane\_fw\_styx\_j5x    | ane (64)  | 0x26a000000  | 0x23b700000+0x8c000   |
+| eos0     | t600x\_ane0\_fw\_eos\_jc3x | ane0 (96) | 0x284000000  | 0x28e080000+0xc02c    |
+| eos1     | t600x\_ane1\_fw\_eos\_jc3x | ane1 (96) | 0x508000000  | 0x28e680100+0x3f2c    |
+| eos2     | t600x\_ane2\_fw\_eos\_jc3x | ane2 (96) | 0x2284000000 | 0x228e080000+0xc02c   |
+| eos3     | t600x\_ane3\_fw\_eos\_jc3x | ane3 (96) | 0x2508000000 | 0x228e680100+0x3f2c   |
+| bia      | h14\_ane\_fw\_bia\_j4xx    | ane (128) | 0x26a000000  | 0x23b700000+0x18000\* |
+
+\* two pmu ranges. 0x23b700000+0x18000 & 0x23b724000+0x4000.
+
 
 
 ## Terminology

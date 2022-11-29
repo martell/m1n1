@@ -10,12 +10,13 @@ class TaskManager:
     TQ_WIDTH = 0x148
     tq_prty = (0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x1e, 0x1f)
 
-    def __init__(self, ane, base_addr):
+    def __init__(self, ane):
         self.u = ane.u
         self.p = ane.p
 
-        self.TM_BASE_ADDR = base_addr + 0x24000
-        self.TQ_BASE_ADDR = base_addr + 0x25000
+        self.TX_BASE_ADDR = self.ane.base_addr + 0x1c00000
+        self.TM_BASE_ADDR = self.TX_BASE_ADDR + 0x24000
+        self.TQ_BASE_ADDR = self.TX_BASE_ADDR + 0x25000
         self.regs = TMRegs(self.u, self.TM_BASE_ADDR)
         self.tq = TaskQueue(self.u, self.TQ_BASE_ADDR)
         return

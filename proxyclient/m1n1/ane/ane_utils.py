@@ -75,6 +75,3 @@ def ez_unpack(data):
 def ez_pack(data):
     assert ((isinstance(data, tuple)) or (isinstance(data, list)))
     return struct.pack('<' + 'L'*(len(data)), *data)
-
-def cap(n, minn, maxn):
-    return max(min(maxn, n), minn)

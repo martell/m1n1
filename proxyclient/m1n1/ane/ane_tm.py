@@ -14,7 +14,7 @@ class TaskManager:
         self.u = ane.u
         self.p = ane.p
 
-        self.TX_BASE_ADDR = self.ane.base_addr + 0x1c00000
+        self.TX_BASE_ADDR = ane.base_addr + 0x1c00000
         self.TM_BASE_ADDR = self.TX_BASE_ADDR + 0x24000
         self.TQ_BASE_ADDR = self.TX_BASE_ADDR + 0x25000
         self.regs = TMRegs(self.u, self.TM_BASE_ADDR)

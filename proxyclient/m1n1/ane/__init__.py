@@ -28,9 +28,6 @@ class ANE:
         self.base_addr = u.adt["arm-io/ane"].get_reg(0)[0]
         self.apply_static_tunables()
 
-        # "No ane-type in device tree, fall back to
-        # determine device type by reading registers"
-        assert (self.p.read32(0x26b840000) == 0xd204a)  # t8103
         self.regs = ANERegs(self.u, self.base_addr)
         self.perf_regs = ANEPerfRegs(self.u, self.base_addr)
 

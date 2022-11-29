@@ -26,16 +26,19 @@ def init_ane_dart_regs(ane):
         print('instance: %d, dart_addr: 0x%x' % (instance, dart_addr))
         dart_regs_all.append(ANEDARTRegs(ane.u, dart_addr))
 
+    # ane.p.dapf_init("/arm-io/dart-ane")
+    # return dart_regs_all
+
     for instance in range(3):
         dart_regs_all[instance].ENABLED_STREAMS.val = 0x0  # disable
 
-    # set init vals for dart0
-    dart_regs_all[0].ENABLED_STREAMS.val = 0x0
-    dart_regs_all[0].TTBR[0, 0].val = 0x0
-    dart_regs_all[0].TTBR[13, 0].val = 0x0
-    dart_regs_all[0].TTBR[15, 0].val = 0x0
-    dart_regs_all[0].STREAM_SELECT.val = 0xffffffff
-    dart_regs_all[0].STREAM_COMMAND.val = 0x100000
+    if 1:
+        dart_regs_all[0].ENABLED_STREAMS.val = 0x0
+        dart_regs_all[0].TTBR[0, 0].val = 0x0
+        dart_regs_all[0].TTBR[13, 0].val = 0x0
+        dart_regs_all[0].TTBR[15, 0].val = 0x0
+        dart_regs_all[0].STREAM_SELECT.val = 0xffffffff
+        dart_regs_all[0].STREAM_COMMAND.val = 0x100000
 
     apply_ane_dart_tunables(ane)
 
@@ -43,16 +46,17 @@ def init_ane_dart_regs(ane):
     dart_regs_all[0].TCR[13].val = 0x100
     dart_regs_all[0].TCR[15].val = 0x100
 
-    for instance in [1, 2]:
-        dart_regs_all[instance].ENABLED_STREAMS.val = 0x0
-        dart_regs_all[instance].TTBR[0, 0].val = 0x0
-        dart_regs_all[instance].TTBR[13, 0].val = 0x0
-        dart_regs_all[instance].TTBR[15, 0].val = 0x0
-        dart_regs_all[instance].STREAM_SELECT.val = 0xffffffff
-        dart_regs_all[instance].STREAM_COMMAND.val = 0x100000
-        dart_regs_all[instance].CONFIG.val = 0x80016100
-        dart_regs_all[instance].UNK_CONFIG_68.val = 0xf0f0f
-        dart_regs_all[instance].UNK_CONFIG_6c.val = 0x80808
+    if 1:
+        for instance in [1, 2]:
+            dart_regs_all[instance].ENABLED_STREAMS.val = 0x0
+            dart_regs_all[instance].TTBR[0, 0].val = 0x0
+            dart_regs_all[instance].TTBR[13, 0].val = 0x0
+            dart_regs_all[instance].TTBR[15, 0].val = 0x0
+            dart_regs_all[instance].STREAM_SELECT.val = 0xffffffff
+            dart_regs_all[instance].STREAM_COMMAND.val = 0x100000
+            dart_regs_all[instance].CONFIG.val = 0x80016100
+            dart_regs_all[instance].UNK_CONFIG_68.val = 0xf0f0f
+            dart_regs_all[instance].UNK_CONFIG_6c.val = 0x80808
 
     dart_regs_all[1].TCR[0].val = 0x80
     dart_regs_all[1].TCR[13].val = 0x80000
@@ -155,3 +159,4 @@ def apply_ane_dart_tunables(ane):
     ane.p.write32(0x26b8040d4, 0x2)
     ane.p.write32(0x26b8040c0, 0x31)
     return
+

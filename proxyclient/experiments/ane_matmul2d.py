@@ -19,7 +19,7 @@ from m1n1.ane.compiler.matmul2d import compile_matmul2d
 ane = ANE(u)
 ane.powerup()
 
-DBG_CFG_REGMON_ON = 1
+DBG_CFG_REGMON_ON = 0
 if DBG_CFG_REGMON_ON:
     rnges = [(0x26b900000, 0x26b90c1fc, 'perf'),
             (0x26bc04000, 0x26bc28000, 'ane'),]

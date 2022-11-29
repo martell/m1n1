@@ -4,10 +4,10 @@ import time
 import struct
 
 from m1n1.hw.dart import DART
-from m1n1.hw.ane import ANERegs, ANEPerfRegs
+from m1n1.hw.ane import ANERegs, ANEPerfRegs, ANEDARTRegs
 
 from m1n1.ane.ane_pwr import powerup
-from m1n1.ane.ane_dart import init_ane_dart_regs
+# from m1n1.ane.ane_dart import init_ane_dart_regs
 from m1n1.ane.ane_context import ANEBufManager
 from m1n1.ane.ane_tiler import ANETiler
 
@@ -37,13 +37,18 @@ class ANE:
 
         self.dart = DART.from_adt(u, path="/arm-io/dart-ane", instance=0)
         self.dart.initialize()
-        self.dart_regs_all = init_ane_dart_regs(self)
+        dart_regs_all = []
+        for instance in range(3):
+            dart_addr = self.u.adt['/arm-io/dart-ane'].get_reg(instance)[0]
+            print('instance: %d, dart_addr: 0x%x' % (instance, dart_addr))
+            dart_regs_all.append(ANEDARTRegs(self.u, dart_addr))
+        self.dart_regs_all = dart_regs_all
 
         self.bufmngr = ANEBufManager(self)
         self.tiler = ANETiler()  # static
         return
 
-    def apply_static_tunables(self):
+    def apply_static_pmgr_tunables(self):
         # this cost me a solid week
         static_tunables_map = [
             (0x0, 0x10), (0x38, 0x50020), (0x3c, 0xa0030),

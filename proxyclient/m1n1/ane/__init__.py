@@ -4,10 +4,9 @@ import time
 import struct
 
 from m1n1.hw.dart import DART
-from m1n1.hw.ane import ANERegs, ANEPerfRegs
+from m1n1.hw.ane import ANERegs, ANEPerfRegs, ANEDARTRegs
 
-from m1n1.ane.ane_pwr import powerup
-from m1n1.ane.ane_dart import init_ane_dart_regs
+from m1n1.ane.ane_pwr import powerup, powerdown, ANEPSManager
 from m1n1.ane.ane_context import ANEBufManager
 from m1n1.ane.ane_tiler import ANETiler
 
@@ -27,7 +26,7 @@ class ANE:
         self.p.pmgr_adt_clocks_enable(f'/arm-io/ane')
         self.p.pmgr_adt_clocks_enable(f'/arm-io/dart-ane')
         self.base_addr = u.adt["arm-io/ane"].get_reg(0)[0]
-        self.apply_static_pmgr_tunables()
+        self.apply_static_tunables()
 
         # "No ane-type in device tree, fall back to
         # determine device type by reading registers"
@@ -37,9 +36,22 @@ class ANE:
 
         self.dart = DART.from_adt(u, path="/arm-io/dart-ane", instance=0)
         self.dart.initialize()
-        self.dart_regs_all = init_ane_dart_regs(self)
+        dart_regs = []
+        for prop in range(3):
+            dart_addr = self.u.adt['/arm-io/dart-ane'].get_reg(prop)[0]
+            dart_regs.append(ANEDARTRegs(self.u, dart_addr))
+        self.dart_regs = dart_regs
 
+        paddr = self.u.memalign(self.PAGE_SIZE, 0x4000)
+        self.dart.iomap(0, paddr, 0x4000)
+        self.ttbr0_addr = self.dart.regs.TTBR[0, 0].val
+        self.dart_regs[1].TTBR[0, 0].val = self.ttbr0_addr
+        self.dart_regs[2].TTBR[0, 0].val = self.ttbr0_addr
+        for prop in range(3):
+            assert (self.dart_regs[prop].TTBR[0, 0].val == self.ttbr0_addr)
+        
         self.bufmngr = ANEBufManager(self)
+        self.psmngr = ANEPSManager(self)
         self.tiler = ANETiler()  # static
         return
 
@@ -63,6 +75,10 @@ class ANE:
         powerup(self)
         return
 
+    def powerdown(self):
+        powerdown(self)
+        return
+
     def get_timestamp(self):
         # unk why there are 4 clocks
         # macos only uses CLK2 for irqs so
@@ -77,19 +93,6 @@ class ANE:
     def iowrite(self, iova, buf):
         self.dart.iowrite(0, iova & 0xFFFFFFFF, buf)
         return
-
-    def syncttbr(self):
-        """
-        since ttbr inits after first alloc
-        call to sync the other 2 instances
-        """
-        ttbr0_addr = self.dart.regs.TTBR[0, 0].val
-        print('updated ttbr0_addr: 0x%x' % ttbr0_addr)
-        self.dart_regs_all[1].TTBR[0, 0].val = ttbr0_addr
-        self.dart_regs_all[2].TTBR[0, 0].val = ttbr0_addr
-        for instance in range(3):
-            assert (self.dart_regs_all[instance].TTBR[0, 0].val == ttbr0_addr)
-        return ttbr0_addr
 
     def get_dma_perf_stats(self):
         dma_rw = self.perf_regs.DMA_RW.val

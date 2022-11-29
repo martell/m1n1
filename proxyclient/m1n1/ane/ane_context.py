@@ -21,9 +21,6 @@ class ANEBufManager:
         self.ane = ane
         self.mapid = 0
         self.map = {}
-        self.dart_synced = False
-        self.alloc_size(0x4000) # for the sake of sync
-        self.run_syncttbr()
         return
 
     def alloc_data(self, data):
@@ -52,12 +49,6 @@ class ANEBufManager:
               % (buf.mapid, buf.paddr, buf.vaddr, buf.size))
         self.mapid += 1
         return buf.vaddr
-
-    def run_syncttbr(self):
-        if ((self.mapid > 0) and (self.dart_synced == False)):
-            self.ane.syncttbr()
-            self.dart_synced = True
-        return
 
     def dump_map(self):
         for mapid in self.map:

@@ -1,16 +1,33 @@
 # SPDX-License-Identifier: MIT
 
-# magic numbers everywhere...
-# ironically solid though
 
 class ANEPSManager:
     def __init__(self, ane):
         self.u = ane.u
         self.p = ane.p
-        self.ps_base_addr = self.u.adt["arm-io/ane"].get_reg(1)[0]
-        self.ps_regs = [self.ps_base_addr + 0xc000 + offset
-                        for offset in range(0x0, 0x38, 0x8)]
 
+        node_addr = self.u.adt["arm-io/ane"].get_reg(1)[0]
+        if (node_addr == 0x23b700000):
+            # either h13 or h14 since same mmio rnge
+            if (self.p.read32(0x26b840000) == 0xd204a): # t8103
+                self.ps_base_addr = 0x23b70c000
+            else:
+                self.ps_base_addr = 0x23b70c010
+        elif (node_addr == 0x28e080000): # ane0
+            self.ps_base_addr = 0x28e08c000
+        elif (node_addr == 0x28e680100): # ane1
+            self.ps_base_addr = 0x28e684000
+        elif (node_addr == 0x228e080000): # ane2
+            self.ps_base_addr = 0x228e08c000
+        elif (node_addr == 0x228e680100): # ane3
+            self.ps_base_addr = 0x228e684000
+        else:
+            raise ValueError("invalid node addr")
+
+        self.ps_regs = [self.ps_base_addr + offset
+                        for offset in range(0x0, 0x38, 0x8)]
+        return
+    
     def powerdown_pds(self):
         # last->first
         for ps_reg in self.ps_regs[::-1]:

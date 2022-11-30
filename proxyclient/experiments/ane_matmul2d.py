@@ -22,7 +22,7 @@ ane.powerup()
 DBG_CFG_REGMON_ON = 1
 if DBG_CFG_REGMON_ON:
     rnges = [(0x26b900000, 0x26b90c1fc, 'perf'),
-            (0x26bc04000, 0x26bc28000, 'ane'),]
+             (0x26bc04000, 0x26bc28000, 'ane'),]
     mon = RegMonitor(u)
     for (start, end, name) in rnges:
         mon.add(start, end-start, name=name)

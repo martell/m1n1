@@ -33,14 +33,15 @@ class TaskManager:
         self.p.write32(0x26b874008, 0x3)  # optional asc signal
         return
 
-    def enqueue_tq(self, req, queue_id=4):
-        # TODO arbitrate free slots
+    def enqueue_tq(self, req):
+        queue_id = self.match_tq()
         if not ((queue_id >= 1) and (queue_id < self.TQ_HW_COUNT)):
             raise ValueError('1 <= queue_id <= 7')
+        req.queue_id = queue_id
 
         if not (self.tq.PRTY[queue_id].val == self.tq_prty[queue_id]):
             raise ValueError('invalid priority setup for tq %d' % queue_id)
-
+        
         print('enqueueing task w/ nid 0x%x @ 0x%x to tq %d'
               % (req.nid, req.vaddr, queue_id))
         self.tq.STATUS[queue_id].val = 0x1  # in use
@@ -51,12 +52,20 @@ class TaskManager:
         self.tq.REQ_SIZE1[queue_id].val = (req.td_size * 0x4000 +
                                            0x1ff0000 & 0x1ff0000)
         self.tq.REQ_ADDR1[queue_id].val = req.vaddr
-        # if | 1 is gone, it doesn't go through !!!; 0x2d -> 0x2d01
         self.tq.REQ_NID1[queue_id].val = (req.nid & 0xff) << 8 | 1
 
         self.tq.REQ_SIZE2[queue_id].val = 0x0  # clear other slot size
         self.tq.REQ_ADDR2[queue_id].val = 0x0  # clear other slot
         return
+
+    def match_tq(self, pref_queue_id=4):
+        free_tqs = []
+        for queue_id, prty in enumerate(self.tq_prty):
+            in_use = self.tq.STATUS[queue_id].val == 1
+            if ((not in_use)):
+                free_tqs.append(queue_id)
+        # nearest available after preferred queue_id
+        return min(queue_id for queue_id in free_tqs if queue_id >= pref_queue_id)
 
     def arbitrate_tq(self):
         enqueued_tqs = []

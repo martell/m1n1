@@ -126,12 +126,13 @@ class BAR:
 
 @dataclass 
 class EngineReq: # hardware req struct
-    td_buf: bytes # for fifo
+    td_buf: bytes
     td_size: int 
     td_count: int
     vaddr: int = 0
     nid: int = 0
     bar: BAR = BAR()
+    queue_id: int = 0
 
 
 class ReqManager:

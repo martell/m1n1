@@ -90,6 +90,8 @@ class ANERegs(RegMap):
     CLK3 = 0x1178000, Register32
     CTR3 = 0x1178004, Register32
 
+    VERSION = 0x1840000, Register32
+
     # for acks during rtkit fw init/deinit
     GPIO0 = 0x1840048, Register32
     GPIO1 = 0x184004c, Register32

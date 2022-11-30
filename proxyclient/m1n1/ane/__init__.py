@@ -28,6 +28,8 @@ class ANE:
         self.base_addr = u.adt["arm-io/ane"].get_reg(0)[0]
         self.apply_static_tunables()
 
+        self.hw_type = getattr(u.adt["arm-io/ane"], "ane-type")
+        self.hw_subtype = 0
         self.regs = ANERegs(self.u, self.base_addr)
         self.perf_regs = ANEPerfRegs(self.u, self.base_addr)
 

@@ -9,7 +9,7 @@ class ANEPSManager:
         node_addr = self.u.adt["arm-io/ane"].get_reg(1)[0]
         if (node_addr == 0x23b700000):
             # either h13 or h14 since same mmio rnge
-            if (self.p.read32(0x26b840000) == 0xd204a): # t8103
+            if (ane.regs.VERSION.val == 0xd204a): # t8103
                 self.ps_base_addr = 0x23b70c000
             else:
                 self.ps_base_addr = 0x23b70c010

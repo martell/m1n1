@@ -14,18 +14,13 @@ From Apple themselves,
 > operations associated with neural network operations [1]
 
 
-Neural processor circuit is a *programmable circuit* [1].
-It is just a MADD unit at its core, but
-using its vast configuration registers, 
-which span the entire 0x4000 - 0x20000 range,
-it can be configured/programmed to do many cool and exotic ops.
+## Hardware
 
 
+### Board types
 
-## Devices
-
-Aka HW board types
-
+An ANE DT instance refers to a single neural processor circuit [2].
+Here's the scraped DT nodes:
 
 | Marketing name                      | Product | SoC   | ane device          | ane type |
 |-------------------------------------|---------|-------|---------------------|----------|
@@ -55,6 +50,71 @@ Aka HW board types
 
 \* two pmu ranges. 0x23b700000+0x18000 & 0x23b724000+0x4000.
 
+
+### Multi-ANEs ??
+
+Regarding the multi-processor ane\*'s,
+I only have a T8103 to study so I'm not 100% on this, 
+but my understanding is that:
+
+1) each device is an indepedent instance 
+2) there's very minimal binary diffs in firmware 
+3) .. without a central communication / sync mechanism 
+4) T600X's don't leverge the multi-engines
+
+My guess is that apple copy-pasted the processors and
+realized concurrency was too hard / unecessary post-prod. 
+AFAIK the mmio ranges I describe below hold true for the other engines,
+so would be interesting to see if the idle silicons can be resuscitated...
+
+
+### Specs
+
+Each board (1 <= M <= 4) can have 8 or 16 (N) neural engines [2].
+Each of the N engines have 256 MAD circuits (X = 256) [2]. This value seems constant.
+For device with 1 board (M = 1), it can have 8 neural engines
+which provides 1\*8\*256 (2,048) operations in each processing cycle [2].
+For a device with two neural processor circuits (M = 2), with
+sixteen neural engines (N = 16), it can provide up to 
+2\*16\*256 (8,192) operations in each processing cycle [2]. 
+The first is true for T8103. Specs are unclear for the others (TODO).
+
+The MAC operates fixed INT8 or FP16 [2]. 
+The same patent claims that each MAC has a 
+*32-bit* accumulator (???) for intermediate buffers, 
+specifically to serve as an "accumulated value 
+for an addition operation with the multiplied value of a subsequent 
+(e.g., next) processing cycle" [2]. 
+This definitely has to do with the L2 cache (see memmap below),
+which is not understood completely yet. 
+
+IRQs (see "execution" later) are synced to a 24Hz clock. 
+
+
+
+## MMIO Map
+
+AKA "safe" ranges I bruteforced.
+Offsets most likely hold true for other boards. 
+
+    0x26a000000 - 0x26a001000 random tunables filled @ init, never again
+    0x26b000000 - 0x26b010020 
+    0x26b050000 - 0x26b0ffff0 
+    0x26b100000 - 0x26b1ffffc 
+    0x26b400000 - 0x26b457100 ane-asc base
+    0x26b800000 - 0x26b808000 
+    0x26b840000 - 0x26b854000 
+    0x26b860000 - 0x26b870000 
+    0x26b874000 - 0x26b875000 
+    0x26b900000 - 0x26b90c200 performance, e.g. clock cycles, dma read bytes
+    0x26bc04000 - 0x26bc28000 config
+    0x26bc34000 - 0x26bc43ffc kmem
+    0x26bd00000 - 0x26bf00000 l2 cache
+
+
+## ASC
+
+TODO
 
 
 ## Terminology
@@ -156,25 +216,18 @@ priority parameters (e.g. async execution / data dependence stuff),
 but that stuff is rarely used. 
 
 
-## FIFO
-
-TODO
-
-
-
-## Misc  
-
 The enqueueing of a TQ and the writes to the "execution" regs are 
 technically the job of the ASC firmware. 
 However, I quickly figured out the 10-ish necessary writes and 
 decided to do them myself. 
 So currently asc is just being ignored. Fw's not even mapped.
 
-- uses DART practically out of the box
-- FP16 :(
-- has its own DPE instance 
-    - and a wall of init data I have yet to figure out
+
+## FIFO
+
+TODO
 
 
 
 [1] https://patentimages.storage.googleapis.com/09/94/b0/33e4247e137a73/US20220237438A1.pdf
+[2] https://patentimages.storage.googleapis.com/86/1d/f1/8bdda8a34c5dc1/US20190340491A1.pdf

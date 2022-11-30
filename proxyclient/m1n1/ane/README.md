@@ -16,10 +16,9 @@ From Apple themselves,
 
 ## Hardware
 
-
 ### Board types
 
-An ANE DT instance refers to a single neural processor circuit [2].
+A DT instance refers to a single neural processor circuit [2].
 Here's the scraped DT nodes:
 
 | Marketing name                      | Product | SoC   | ane device          | ane type |
@@ -53,25 +52,30 @@ Here's the scraped DT nodes:
 
 ### Multi-ANEs ??
 
-Regarding the multi-processor ane\*'s,
-I only have a T8103 to study so I'm not 100% on this, 
-but my understanding is that:
+I only have a T8103 in front of me so I'm not 100% on this, 
+but regarding the multi-processor ane\*'s,
+my understanding is that:
 
 1) each device is an indepedent instance 
 2) there's very minimal binary diffs in firmware 
 3) .. without a central communication / sync mechanism 
-4) T600X's don't leverge the multi-engines
+4) T600X's don't leverge the multi-ane's
 
 My guess is that apple copy-pasted the processors and
 realized concurrency was too hard / unecessary post-prod. 
-AFAIK the mmio ranges I describe below hold true for the other engines,
+Backing this is the patent, titled "*Scalable* Neural Network Processing Engine", 
+which says, "in some embodiments... multiple activated neural
+processor circuits perform ... in parallel" [2]; immediately the next sentence
+discusses "deactivated" processors for "power saving" mode [2]. 
+Nothing more about multi-engines. Hmmm.
+AFAIK the MMIO ranges (described below) hold true for the other boards,
 so would be interesting to see if the idle silicons can be resuscitated...
 
 
 ### Specs
 
 Each board (1 <= M <= 4) can have 8 or 16 (N) neural engines [2].
-Each of the N engines have 256 MAD circuits (X = 256) [2]. This value seems constant.
+Each of the N engines have 256 MADD circuits (X = 256) [2]. This value seems constant.
 For device with 1 board (M = 1), it can have 8 neural engines
 which provides 1\*8\*256 (2,048) operations in each processing cycle [2].
 For a device with two neural processor circuits (M = 2), with
@@ -81,40 +85,101 @@ The first is true for T8103. Specs are unclear for the others (TODO).
 
 The MAC operates fixed INT8 or FP16 [2]. 
 The same patent claims that each MAC has a 
-*32-bit* accumulator (???) for intermediate buffers, 
+*32-bit* accumulator (??) for intermediate buffers, 
 specifically to serve as an "accumulated value 
 for an addition operation with the multiplied value of a subsequent 
 (e.g., next) processing cycle" [2]. 
-This definitely has to do with the L2 cache (see memmap below),
-which is not understood completely yet. 
+The relation to L2 (see L2 section) is not really 
+understood, and where the 32 would come from then.
 
 IRQs (see "execution" later) are synced to a 24Hz clock. 
 
 
-
 ## MMIO Map
 
-AKA "safe" ranges I bruteforced.
+"Safe" ranges I bruteforced within the entire 0x2000000 container.
 Offsets most likely hold true for other boards. 
+~~Importance in descending order~~
 
     0x26a000000 - 0x26a001000 random tunables filled @ init, never again
-    0x26b000000 - 0x26b010020 
-    0x26b050000 - 0x26b0ffff0 
-    0x26b100000 - 0x26b1ffffc 
-    0x26b400000 - 0x26b457100 ane-asc base
-    0x26b800000 - 0x26b808000 
-    0x26b840000 - 0x26b854000 
-    0x26b860000 - 0x26b870000 
-    0x26b874000 - 0x26b875000 
-    0x26b900000 - 0x26b90c200 performance, e.g. clock cycles, dma read bytes
-    0x26bc04000 - 0x26bc28000 config
-    0x26bc34000 - 0x26bc43ffc kmem
-    0x26bd00000 - 0x26bf00000 l2 cache
+    0x26b000000 - 0x26b010020 random asc data  
+    0x26b050000 - 0x26b1ffffc asc [a]
+    0x26b400000 - 0x26b457100 asc mailbox [b]
+    0x26b800000 - 0x26b808000 dart0, dart3 (0x4000 each)
+    0x26b810000 - 0x26b814000 dart1 
+    0x26b820000 - 0x26b824000 dart2 
+    0x26b840000 - 0x26b854000 asc irq / doorbell [c]
+    0x26b860000 - 0x26b870000 gpio for acks w/ asc; "let's meet here"
+    0x26b874000 - 0x26b875000 nada
+    0x26b8ec000 - 0x26b8efffc dpe ppt (?) data 
+    0x26b8f0000 - 0x26b8f3ffc dpe sys tunables / data [d]
+    0x26b8f4000 - 0x26b875000 dpe soc tunables / data [d]
+    0x26b900000 - 0x26b90c200 performance reports, e.g. DMA read bytes
+    0x26bc04000 - 0x26bc28000 computation engine [e]
+    0x26bc34000 - 0x26bc44000 krn L2 cache
+    0x26bd00000 - 0x26bf00000 tile L2 cache
+
+[a] 0x1050000 is RVBAR. Protip: if you mess with this region while running a coreml model under the hypervisor, the kext straight up fails and dumps (log show --last 5m) the names of ASC/CPU IMPL regs in the very region. Talk about irony. Fans go screeching tho. Also some free-running 24hz clocks in the upper region engine cycles sync to.
+
+[b] maps to [HW:ASC](https://github.com/AsahiLinux/docs/wiki/HW:ASC) somewhat, so mailbox stuff. HOWEVER, this "mailbox" isn't used for communication (see ASC below).
+
+[c] hard-coded acks. version code at the top. probably not much different than the gpio's right below it.
+
+[d] default tunables filled in at boot. these are constant and retain state.
+
+[e] from this point on is the "computation engine", as expanded in the next section. 
 
 
-## ASC
 
-TODO
+## Computation Engine
+
+Like other components on the M1, there's an ASC (logs call it "ANE CPU") running firmware
+*faciliating* the computation. This section deals not with the ASC's role/interface, but 
+how the "neural processor circuit" does the *actual* computation. 
+I'm calling this collectively the "engine".
+
+    0x26bc04000 - 0x26bc20000 MADD configuration
+    0x26bc20000 - 0x26bc24000 DMA configuration
+    0x26bc24000 - 0x26bc25000 task manager 
+    0x26bc25000 - 0x26bc28000 task queues 
+    0x26bc34000 - 0x26bc44000 kernel memory
+    0x26bd00000 - 0x26bf00000 tile L2 cache
+
+### Overview
+
+The core computation engine is just a MADD unit. 
+At a high-level, the engine takes input and passes it through the MADDs
+to generate output.
+The engine is not smart. 
+When the "trigger" register is written to, it will "push" 
+(a single pass through the MADDs) with whatever the current state says. 
+There's no predefined primitive unit (e.g. shader), 
+hence no ISA that operates on those. 
+Its "work unit", at best, 
+is a 0x4000 tile of IEEE 754 packed floats.
+
+To quote apple again,
+
+> Neural processor circuit is a *configurable circuit* 
+> that performs neural network operations on the 
+> input data based at least on kernel data [3]
+
+The fundamental model is a [2D/image convolution](https://stats.stackexchange.com/a/335327), 
+which is a sum of the products (ah, see where MADD comes in) 
+of an input matrix against a "sliding window" (kernel). 
+All other "modes" (e.g. element-wise, concat, matrix multiplication) 
+are secretly a ***convolution shaped in a funny way***
+s.t. it is represented as a **MADD pass through the engine**.
+For example, a (N, M) matrix multiplication is reshaped as a 
+convolution with 1x1 shaped kernel data with M input channels and L output channels
+(see [4] for more reading and 
+ane_matmul2d.py where the input matrix is copied for the broadcasting trick). 
+Restated,
+
+1) Various "modes" of operation are just certain *configurations* of the engine.  
+2) The "secret" to all those exotic neural network ops lie in the
+0x26bc04000 - 0x26bc20000 configuration registers
+3) There is no difference in executing a basic convolution vs. batched 3D pooled ellipse kernel acosh hyper-relu-whatever lstm as long as it is compiled to the fundamental model.
 
 
 ## Terminology
@@ -122,41 +187,121 @@ TODO
 **task:** 
 A task is an ANE's "op". 
 
+**task sequence (TS):** 
+Given a neural network, the frontend of Apple's compiler 
+builds a DAG ast-like representation of the operations. 
+This graph is transformed into a linear linked list of *tasks*, collectively a *task sequence*. 
+
 **task descriptor (TD):**
 A task is associated with a *task descriptor* 
 that defines a configuration of neural processor circuit to execute the task [1]. 
-Basically, a regfile describing the configuration registers. 
-It has a specific format allowing the "TD fetcher DMA circuit"[1] to fetch it from 
-sysmem & write to the registers for us. This isn't just a memcpy, it's smart:
-it accounts for repeats, fills in address data (see BAR soon), calculates
-next address offsets, etc. Each TD buf is 0x274 ish long. 
+AFAIK each TD is 0x274 or 0x278 long depending on whether the header is 28 or 32 long. 
+TD has a certain encoding expected by the TD fetcher circuit (see DMA soon). 
+It has these fields:
+
+| kernel     | common     | src tile   | dst tile   | L2         | planar     | neural     |
+|------------|------------|------------|------------|------------|------------|------------|
+| 0xf401f800 | 0x3c000000 | 0x6c013800 | 0x44004800 | 0x0c008800 | 0x1000c800 | 0x18017800 |
 
 
-    struct task_sequence {
-        dma_addr_t ts_buf;
-        unsigned int td_count;
-        unsigned int t0_size;
-    };
-
-**task sequence (TS):** 
-Given a neural network, the frontend of Apple's compiler 
-builds a DAG ast-like representation of the computation ops. 
-This graph is transformed into a linear linked list of *tasks*, referred to as a *task sequence*. 
-hence TS represents the complete neural network in a format executable by the neural processor circuit[1].
-No upper limit on the number of tasks, but total size <0x10000. 
-
-**head task descriptor (T0):**
-The 0th index TD of a TS. 
-Only this TD is used for populating & pushing the FIFO req pool. 
+TLDR, a task is a pass on the ANE. 
+TD is a binary file describing the state of the configuration registers in that pass. 
+A full neural network often can't be dumbed down to a single pass,
+so it sequence of them are passed around instead. 
+Thus, TS represents the complete neural network in a 
+format executable by the neural processor circuit [1]. 
 
 
-    struct engine_request {
-        struct task_sequence *ts;
-        unsigned int nid;
-        dma_addr_t fifo_vaddr;
-        dma_addr_t bar[0x20];
-    };
+## DMA
 
+Thankfully, there's no crazy memory management.
+It uses DART practically out-of-the-box. 
+Anything DMA deals with DART-translated virtual addresses, 
+which the (not image) kernel is in full control of.
+Address stuff & how these are coupled is discussed in depth in 
+*Scheduling* (specifically BAR). 
+There are 4 DMA circuits for IO between sysmem/hw, each with its own role:
+
+**1) Kernel Fetcher**:
+One job: given the vaddr in the kernel_vaddr register, memcpy's it to the 
+kernel memory (see L2). Can be ~~any~~ 0 <= x <= 0x10000 (region size) 8b-aligned size.
+
+**2) Input Tile Fetcher**:
+*Dynamically determined number of* job(s): given the vaddr(s) in the src(N) register(s), memcpy's it to L2. Operates on the basis of tiles, so must be aligned to the tile size (0x4000). 
+
+**3) Output Tile Sender**:
+Same as above, but other way around.
+Still investigating whether/how multiple output tiles are supported.
+
+**4) TD Fetcher**:
+Note that the configuration registers (0x26bc04000 - 0x26bc20000)
+are never touched directly. That would be both expensive and error-prone.
+The TD fetcher handles it for us. 
+Recall the TD codes; (mostly) the upper half for the length of the
+subsequent stream of values & lower half for the offset (from 0x26bc00000),
+which the fetcher broadcasts it accordingly. There are lots of 
+adjustments though; notice how the TD buffer supposedly fills up something 200x its size?
+TD encodes many more special broadcasts/repeats/exceptions, 
+for example the "common" field gets copied to -0x800 before the others 
+(notice the lower is 0x0000 which isn't accessible). 
+
+Fun fact: I reversed the entire TD broadcasting 
+process *and* wrote a driver for the subsequent writes before realizing it 
+wasn't me doing the work. 
+I commented out a wrong line and still saw the config range fill up, 
+thought I was going insane, and ended up doing a new os install.
+Randomly replaced a BAR addr with 0xCAFEBABE, and 
+saw it magically broadcast to my reversed locations.
+Figured out BAR within the next hour and everything started to make sense.
+
+
+## L2 / kmem
+
+The engine has its own L2 cache (not asc's L2, that's separate),
+which is just a chunk of the MMIO region. 
+Think of it as an intermediate work space.
+The following is the region in midst of a batched pass; 
+input (uniform 2222 matrix for clarity) first populates the region. See how the 
+sections are accumulating to 3e8b:
+
+    000000026bd003a0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd003c0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd003e0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd00400 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00420 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00440 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00460 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00480 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd004a0 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd004c0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd004e0 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00500 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd00520 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00540 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+    000000026bd00560 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
+    000000026bd00580 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+
+This region is *never* touched by anyone else. It's not designed to be managed. 
+The engine, upon receiving a new input, simply overwrites it. 
+Here's it after another cycle (input 4500 & output 5500), purposely shaped smaller,
+overwriting the previous:
+
+    000000026bd00100 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd00120 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd00140 22222222 22222222 22222222 22222222 45004500 45004500 00000000 00000000
+    000000026bd00160 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd001a0 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd001e0 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd00220 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
+    000000026bd00240 22222222 22222222 22222222 22222222 45004500 45004500 00000000 00000000
+    000000026bd00340 22222222 22222222 22222222 22222222 45004500 45004500 00000000 00000000
+    000000026bd00440 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 45004500 45004500 00000000 00000000
+
+Kernel memory behaves similarly but is not a "work region". 
+It's just a place for the kernel data to reside. It also gets overwritten.
+
+
+## Terminology
 
 **request:**
 neural engine's unit of execution.
@@ -228,6 +373,23 @@ So currently asc is just being ignored. Fw's not even mapped.
 TODO
 
 
+## TODO
 
-[1] https://patentimages.storage.googleapis.com/09/94/b0/33e4247e137a73/US20220237438A1.pdf
-[2] https://patentimages.storage.googleapis.com/86/1d/f1/8bdda8a34c5dc1/US20190340491A1.pdf
+- see what happens if unmapped addr is placed in BAR
+- pattern for kmem overwrites
+
+
+
+## Sources
+
+[1] [TASK CONTEXT SWITCH FOR NEURAL PROCESSOR CIRCUIT](https://patentimages.storage.googleapis.com/86/1d/f1/8bdda8a34c5dc1/US20190340491A1.pdf)
+
+[2] [SCALABLE NEURAL NETWORK PROCESSING ENGINE](https://patentimages.storage.googleapis.com/09/94/b0/33e4247e137a73/US20220237438A1.pdf)
+
+[3] ) DYNAMICALLY SHAPING AND
+SEGMENTING WORK UNITS FOR
+PROCESSING IN NEURAL NETWORK
+PROCESSOR
+
+
+[4] https://patentimages.storage.googleapis.com/b9/db/be/52e7a45d4cafd5/US20190340486A1.pdf

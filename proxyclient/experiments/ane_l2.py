@@ -97,8 +97,8 @@ def main(src1_arr, src2_arr, compiler_args, dst_shape):
 M = 5 # HOLD
 N = 32 # 1 <= N <= 1024
 P = 16 # 1 <= P <= 16 # trails off weird past 16
-src1_arr = (np.zeros((M, N)) + 1).astype(np.float64)
-src2_arr = (np.zeros((N, P)) + 2).astype(np.float64)
+src1_arr = (np.zeros((M, N)) + 4.266).astype(np.float64) # 0.225 4.266
+src2_arr = (np.zeros((N, P)) + 0.01198).astype(np.float64)
 main(src1_arr, src2_arr, (N, P), (M, P))
 
 

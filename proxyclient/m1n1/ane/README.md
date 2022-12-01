@@ -7,19 +7,19 @@ From Apple themselves,
 
 > Neural processor circuit is a circuit that 
 > performs various machine learning operations based on 
-> computation including multiplication, addition, and accumulation. 
+> computation including multiplication, addition, and accumulation.
 > Neural processor circuit is a configurable circuit that
 > performs these operations in a fast and power-efficient
 > manner while relieving CPU of resource-intensive
-> operations associated with neural network operations [1]
+> operations associated with neural network operations[1]
 
 
 ## Hardware
 
 ### Board types
 
-A DT instance refers to a single neural processor circuit [2].
-Here's the scraped DT nodes:
+Each neural processor has its own DT instance.
+Here's the scraped DT nodes for each SoC:
 
 | Marketing name                      | Product | SoC   | ane device          | ane type |
 |-------------------------------------|---------|-------|---------------------|----------|
@@ -38,6 +38,8 @@ Here's the scraped DT nodes:
 | MacBook Air (M2, 2022)              | J413AP  | T8112 | ane                 | 128      |
 
 
+More on each board variant:
+
 | codename | firmware                   | dt (type) | mmio base    | pmu base + size       |
 |----------|----------------------------|-----------|--------------|-----------------------|
 | styx     | h13\_ane\_fw\_styx\_j5x    | ane (64)  | 0x26a000000  | 0x23b700000+0x8c000   |
@@ -50,49 +52,40 @@ Here's the scraped DT nodes:
 \* two pmu ranges. 0x23b700000+0x18000 & 0x23b724000+0x4000.
 
 
+### Specs
+
+Each board (1 <= M <= 4) can have 8 or 16 (N) neural engines [2].
+Each of the N neural engines have 256 MADD circuits (X = 256) [2]. 
+This value seems constant.
+For device with 1 board (M = 1), it can have 8 neural engines
+which provides ``1*8*256 = 2048`` operations in each processing cycle [2].
+For a device with two neural processor circuits (M = 2), with
+sixteen neural engines (N = 16), it can provide up to 
+``2*16*256 = 8192`` operations in each processing cycle [2]. 
+The first is true for T8103. Specs are unclear for the others (TODO).
+
+
 ### Multi-ANEs ??
 
-I only have a T8103 in front of me so I'm not 100% on this, 
-but regarding the multi-processor ane\*'s,
+I only have a measly T8103 in front of me so I'm not 100% on this, 
+but regarding the multi-processor ane[0-3]'s,
 my understanding is that:
 
-1) each device is an indepedent instance 
+1) each processor is an indepedent instance 
 2) there's very minimal binary diffs in firmware 
 3) .. without a central communication / sync mechanism 
 4) T600X's don't leverge the multi-ane's
 
 My guess is that apple copy-pasted the processors and
 realized concurrency was too hard / unecessary post-prod. 
-Backing this is the patent, titled "*Scalable* Neural Network Processing Engine", 
-which says, "in some embodiments... multiple activated neural
-processor circuits perform ... in parallel" [2]; immediately the next sentence
-discusses "deactivated" processors for "power saving" mode [2]. 
-Nothing more about multi-engines. Hmmm.
+Backing this is the patent introducing the architecture:
+"in some embodiments... multiple activated neural
+processor circuits perform ... in parallel" [2]; 
+Immediately the next sentence 
+discusses "deactivated" processors for "power saving" mode [2]. Hmmm.
 AFAIK the MMIO ranges (described below) hold true for the other boards,
 so would be interesting to see if the idle silicons can be resuscitated...
 
-
-### Specs
-
-Each board (1 <= M <= 4) can have 8 or 16 (N) neural engines [2].
-Each of the N engines have 256 MADD circuits (X = 256) [2]. This value seems constant.
-For device with 1 board (M = 1), it can have 8 neural engines
-which provides 1\*8\*256 (2,048) operations in each processing cycle [2].
-For a device with two neural processor circuits (M = 2), with
-sixteen neural engines (N = 16), it can provide up to 
-2\*16\*256 (8,192) operations in each processing cycle [2]. 
-The first is true for T8103. Specs are unclear for the others (TODO).
-
-The MAC operates fixed INT8 or FP16 [2]. 
-The same patent claims that each MAC has a 
-*32-bit* accumulator (??) for intermediate buffers, 
-specifically to serve as an "accumulated value 
-for an addition operation with the multiplied value of a subsequent 
-(e.g., next) processing cycle" [2]. 
-The relation to L2 (see L2 section) is not really 
-understood, and where the 32 would come from then.
-
-IRQs (see "execution" later) are synced to a 24Hz clock. 
 
 
 ## MMIO Map
@@ -101,7 +94,7 @@ IRQs (see "execution" later) are synced to a 24Hz clock.
 Offsets most likely hold true for other boards. 
 ~~Importance in descending order~~
 
-    0x26a000000 - 0x26a001000 random tunables filled @ init, never again
+    0x26a000000 - 0x26a001000 random tunables filled @ init
     0x26b000000 - 0x26b010020 random asc data  
     0x26b050000 - 0x26b1ffffc asc [a]
     0x26b400000 - 0x26b457100 asc mailbox [b]
@@ -115,154 +108,97 @@ Offsets most likely hold true for other boards.
     0x26b8f0000 - 0x26b8f3ffc dpe sys tunables / data [d]
     0x26b8f4000 - 0x26b875000 dpe soc tunables / data [d]
     0x26b900000 - 0x26b90c200 performance reports, e.g. DMA read bytes
-    0x26bc04000 - 0x26bc28000 computation engine [e]
-    0x26bc34000 - 0x26bc44000 krn L2 cache
+    0x26bc04000 - 0x26bc28000 engine [e]
+    0x26bc34000 - 0x26bc44000 kernel L2 cache [f]
     0x26bd00000 - 0x26bf00000 tile L2 cache
 
-[a] 0x1050000 is RVBAR. Protip: if you mess with this region while running a coreml model under the hypervisor, the kext straight up fails and dumps (log show --last 5m) the names of ASC/CPU IMPL regs in the very region. Talk about irony. Fans go screeching tho. Also some free-running 24hz clocks in the upper region engine cycles sync to.
+[a] 0x1050000 is RVBAR. Protip: if you mess with this region while running a coreml model under the hypervisor, the kext straight up fails and dumps (``log show --last 5m``) the names of ASC/CPU IMPL regs in the very region. Ironic. Also some free-running 24hz clocks in the upper region the engine cycles sync to.
 
-[b] maps to [HW:ASC](https://github.com/AsahiLinux/docs/wiki/HW:ASC) somewhat, so mailbox stuff. HOWEVER, this "mailbox" isn't used for communication (see ASC below).
+[b] maps to [HW:ASC](https://github.com/AsahiLinux/docs/wiki/HW:ASC) somewhat, so should be mailbox stuff. however, this is either not mailbox or it's just not used for communication
 
-[c] hard-coded acks. version code at the top. probably not much different than the gpio's right below it.
+[c] these are the regs used for communication. I don't think it's wired to asc? More similar to the gpio regs right below it? 
 
 [d] default tunables filled in at boot. these are constant and retain state.
 
-[e] from this point on is the "computation engine", as expanded in the next section. 
+[e] from this point on is the "computation core", as expanded in the next section. 
+
+[f] there's the [Kernel (operating system)](https://en.wikipedia.org/wiki/Kernel_(operating_system)) and [Kernel (image processing)](https://en.wikipedia.org/wiki/Kernel_(image_processing)). The former will be referred to as "kernel-side". 
+So, the latter here.
 
 
-
-## Computation Engine
+## Computation Core
 
 Like other components on the M1, there's an ASC (logs call it "ANE CPU") running firmware
 *faciliating* the computation. This section deals not with the ASC's role/interface, but 
-how the "neural processor circuit" does the *actual* computation. 
-I'm calling this collectively the "engine".
+how the processor does the *actual* computation. MMIO map:
 
     0x26bc04000 - 0x26bc20000 MADD configuration
     0x26bc20000 - 0x26bc24000 DMA configuration
     0x26bc24000 - 0x26bc25000 task manager 
     0x26bc25000 - 0x26bc28000 task queues 
-    0x26bc34000 - 0x26bc44000 kernel memory
+    0x26bc34000 - 0x26bc44000 kernel L2 cache
     0x26bd00000 - 0x26bf00000 tile L2 cache
 
-### Overview
 
-The core computation engine is just a MADD unit. 
-At a high-level, the engine takes input and passes it through the MADDs
-to generate output.
-The engine is not smart. 
-When the "trigger" register is written to, it will "push" 
-(a single pass through the MADDs) with whatever the current state says. 
+
+### Convolution
+
+Motivated by CNNs, the ANE was designed to accel
+[2D/image convolution](https://stats.stackexchange.com/a/335327), 
+which is a *sum of the products* of an input matrix within a "sliding window" (kernel). 
+Accordingly, the computation core is a 
+multiply-add (MADD) unit (recall X = 256 MADD circuits)
+similar to many DSP/ISPs. 
+
+A high-level overview of an operation: 
+each MADD is first loaded with the kernel coefficients; input is pushed through the MADDs;
+the input value and the corresponding kernel coefficient are multiplied
+within the MADD to generate a processed value [5].
 There's no predefined primitive unit (e.g. shader), 
-hence no ISA that operates on those. 
-Its "work unit", at best, 
-is a 0x4000 tile of IEEE 754 packed floats.
+hence no ISA that operates on those; 
+its "work unit", at best, is a 0x4000 tile of IEEE 754 packed floats.
+When the signalled at the control register,
+it will literally push forward with whatever's in the current state.
 
-To quote apple again,
+
+
+### .maddrc
 
 > Neural processor circuit is a *configurable circuit* 
 > that performs neural network operations on the 
 > input data based at least on kernel data [3]
 
-The fundamental model is a [2D/image convolution](https://stats.stackexchange.com/a/335327), 
-which is a sum of the products (ah, see where MADD comes in) 
-of an input matrix against a "sliding window" (kernel). 
-All other "modes" (e.g. element-wise, concat, matrix multiplication) 
-are secretly a ***convolution shaped in a funny way***
-s.t. it is represented as a **MADD pass through the engine**.
-For example, a (N, M) matrix multiplication is reshaped as a 
-convolution with 1x1 shaped kernel data with M input channels and L output channels
-(see [4] for more reading and 
-ane_matmul2d.py where the input matrix is copied for the broadcasting trick). 
+Macos' compiler (and my minimal prototype :P) 
+supports many cool operations 
+other than the default convolution e.g.
+element-wise mode or matrix multiplication. 
+The core doesn't change though:
+the "other" ops are secretly a ***convolution shaped in a funny way***
+s.t. the operation is represented as a **MADD pass**. 
+For example, a (NxM) @ (MxL) matrix multiplication 
+is reformatted as the convolution of 
+each N-dim slice of the (W=N, H=1, C=M) input 
+with a 1x1 shaped kernel data with (Cin=M, Cout=L)[4];
+this "instruction" is achieved by 
+**setting the MADD configuration registers**\*
+with fields like the new data size to fetch, 
+total batch count to repeat for, 
+a signal for the accumulator to "hold on" to the
+slices in L2 until all slices are done, etc. 
 Restated,
 
-1) Various "modes" of operation are just certain *configurations* of the engine.  
-2) The "secret" to all those exotic neural network ops lie in the
-0x26bc04000 - 0x26bc20000 configuration registers
-3) There is no difference in executing a basic convolution vs. batched 3D pooled ellipse kernel acosh hyper-relu-whatever lstm as long as it is compiled to the fundamental model.
+1) The ANE is a programmable / configurable MADD based on 2D convolutions
+2) At the manager level, there is not much difference in executing a basic convolution vs. batched 3D pooled ellipse kernel hyper-relu-whatever acosh lstm (assuming it can be compiled... See TD!)
 
 
-## Terminology
-
-**task:** 
-A task is an ANE's "op". 
-
-**task sequence (TS):** 
-Given a neural network, the frontend of Apple's compiler 
-builds a DAG ast-like representation of the operations. 
-This graph is transformed into a linear linked list of *tasks*, collectively a *task sequence*. 
-
-**task descriptor (TD):**
-A task is associated with a *task descriptor* 
-that defines a configuration of neural processor circuit to execute the task [1]. 
-AFAIK each TD is 0x274 or 0x278 long depending on whether the header is 28 or 32 long. 
-TD has a certain encoding expected by the TD fetcher circuit (see DMA soon). 
-It has these fields:
-
-| kernel     | common     | src tile   | dst tile   | L2         | planar     | neural     |
-|------------|------------|------------|------------|------------|------------|------------|
-| 0xf401f800 | 0x3c000000 | 0x6c013800 | 0x44004800 | 0x0c008800 | 0x1000c800 | 0x18017800 |
-
-
-TLDR, a task is a pass on the ANE. 
-TD is a binary file describing the state of the configuration registers in that pass. 
-A full neural network often can't be dumbed down to a single pass,
-so it sequence of them are passed around instead. 
-Thus, TS represents the complete neural network in a 
-format executable by the neural processor circuit [1]. 
-
-
-## DMA
-
-Thankfully, there's no crazy memory management.
-It uses DART practically out-of-the-box. 
-Anything DMA deals with DART-translated virtual addresses, 
-which the (not image) kernel is in full control of.
-Address stuff & how these are coupled is discussed in depth in 
-*Scheduling* (specifically BAR). 
-There are 4 DMA circuits for IO between sysmem/hw, each with its own role:
-
-**1) Kernel Fetcher**:
-One job: given the vaddr in the kernel_vaddr register, memcpy's it to the 
-kernel memory (see L2). Can be ~~any~~ 0 <= x <= 0x10000 (region size) 8b-aligned size.
-
-**2) Input Tile Fetcher**:
-*Dynamically determined number of* job(s): given the vaddr(s) in the src(N) register(s), memcpy's it to L2. Operates on the basis of tiles, so must be aligned to the tile size (0x4000). 
-
-**3) Output Tile Sender**:
-Same as above, but other way around.
-Still investigating whether/how multiple output tiles are supported.
-
-**4) TD Fetcher**:
-Note that the configuration registers (0x26bc04000 - 0x26bc20000)
-are never touched directly. That would be both expensive and error-prone.
-The TD fetcher handles it for us. 
-Recall the TD codes; (mostly) the upper half for the length of the
-subsequent stream of values & lower half for the offset (from 0x26bc00000),
-which the fetcher broadcasts it accordingly. There are lots of 
-adjustments though; notice how the TD buffer supposedly fills up something 200x its size?
-TD encodes many more special broadcasts/repeats/exceptions, 
-for example the "common" field gets copied to -0x800 before the others 
-(notice the lower is 0x0000 which isn't accessible). 
-
-Fun fact: I reversed the entire TD broadcasting 
-process *and* wrote a driver for the subsequent writes before realizing it 
-wasn't me doing the work. 
-I commented out a wrong line and still saw the config range fill up, 
-thought I was going insane, and ended up doing a new os install.
-Randomly replaced a BAR addr with 0xCAFEBABE, and 
-saw it magically broadcast to my reversed locations.
-Figured out BAR within the next hour and everything started to make sense.
-
-
-## L2 / kmem
+### L2
 
 The engine has its own L2 cache (not asc's L2, that's separate),
-which is just a chunk of the MMIO region. 
-Think of it as an intermediate work space.
+located in the last remaining chunk of MMIO space. 
+It functions as a fast & temporary intermediate work space.
 The following is the region in midst of a batched pass; 
-input (uniform 2222 matrix for clarity) first populates the region. See how the 
-sections are accumulating to 3e8b:
+an input matrix of 2222, first populates the region; with the push,
+the slices of the region are accumulating to the output (3e8b).
 
     000000026bd003a0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
     000000026bd003c0 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
@@ -281,10 +217,9 @@ sections are accumulating to 3e8b:
     000000026bd00560 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b
     000000026bd00580 22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
 
-This region is *never* touched by anyone else. It's not designed to be managed. 
-The engine, upon receiving a new input, simply overwrites it. 
-Here's it after another cycle (input 4500 & output 5500), purposely shaped smaller,
-overwriting the previous:
+L2 is *never* touched. That's the DMA fetchers' job and it's clearly not meant to be managed: 
+upon receiving a new input, the engine simply overwrites the values leftover from the previous cycle. 
+Here's it after another pass  with input 4500 & output 5500, both purposely shaped smaller to demonstrate the temporary nature:
 
     000000026bd00100 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
     000000026bd00120 55005500 55005500 55005500 55005500 55005500 55005500 55005500 55005500
@@ -297,86 +232,238 @@ overwriting the previous:
     000000026bd00340 22222222 22222222 22222222 22222222 45004500 45004500 00000000 00000000
     000000026bd00440 3e8b3e8b 3e8b3e8b 3e8b3e8b 3e8b3e8b 45004500 45004500 00000000 00000000
 
-Kernel memory behaves similarly but is not a "work region". 
+Kernel data has its own space; unlike tile L2, it's never operated on and 
+it's read-only (since there's no kernel data being sent back). 
 It's just a place for the kernel data to reside. It also gets overwritten.
 
 
-## Terminology
 
-**request:**
-neural engine's unit of execution.
+## TD 
 
-**Neural ID (NID):**
-identifier constant for a request. 0x00 < nid < 0xff. 
-Used for 1) identifying the TD in a TS 2) identifying a TS in a pool of FIFO requests.   
-
-**Base Address Resolution (BAR):**
-A 0x20 arr/list/table of virtual addresses. 
-Of the many config regs, there are ones for address, 
-e.g. tile destination buffer address register. 
-These are zeroed out by the compiler (for good reason). 
-Instead of ever manually manipulating those, 
-Apple nicely hooked a circuit (this will make sense in a moment)
-s.t. the values in BAR are dma'd to their appropriate positions in the config regs.
-It even calculates the offsetted addrs (e.g. destination next addr).
-BAR has a set order (e.g. td_ptr->krn_ptr->src1_ptr) to make address oopsies hard. 
-Note that BAR[0] is always the dva to the TS buffer.
+A **task** is a pass on the ANE. 
+A task is associated with a **task descriptor**
+that defines a configuration of neural processor circuit to execute the task [1]. 
+A TD is a binary file describing the state of the configuration registers. 
+TD has a certain encoding expected by the TD fetcher circuit (will see in DMA section soon). 
+As of T8103, the *fields* of a TD, 
+which are continuous "sections" of the config regs with a set function, along with
+their codes, is as follows:
 
 
-
-## Scheduling
-
-The Task Manager (TM) operates on the basis of queues. 
-Each Task Queue (TQ) is a hardware slot, and there's 8 of them. 
-See FIG 10 of [1].
-A TQ is basically a "waiting room" 
-for a single request before it is "arbitered" by the TM to to be executed.
-Looking at the structure of a TQ below, you can see how it is
-designed to encapsulate a *task*
-(familiar words like BAR and NID, eh?)
+| Kernel     | Common     | Src        | L2         | Planar     | Neural     | Dst        |
+|------------|------------|------------|------------|------------|------------|------------|
+| 0xf401f800 | 0x3c000000 | 0x6c013800 | 0x44004800 | 0x0c008800 | 0x1000c800 | 0x18017800 |
 
 
-    class TaskQueue(RegMap):
-        STATUS     = irange(0x00, 8, 0x148), Register32
-        PRTY       = irange(0x10, 8, 0x148), Register32
-        FREE_SPACE = irange(0x14, 8, 0x148), Register32
-        TQINFO     = irange(0x1c, 8, 0x148), R_TQINFO
+Illustrated as 1204X of FIG12 of [1],
+each field has a code encoding a 
+"Register Count" and "Register Address", specifically [31:24] and [23:0]; 
+e.g. field "src" has has 0x6c-many stream of registers starting from offset 0x13800.
+The base for this offset is +0x1c00000 mmio space (0x26bc00000).
+Since the header is always 0x28 or 0x32 long [1], and
+``0xf4 + 0x3c + 0x6c + 0x44 + 0x0c + 0x10 + 0x18 + (0x7 * 8) = 0x24c``,
+a TD must always be 0x274 or 0x278, which has been the case.
 
-        BAR1 = (irange(0x20, 8, 0x148), irange(0x0, 0x20, 4)), Register32
-        REQ_NID1  = irange(0xa0, 8, 0x148), Register32
-        REQ_SIZE2 = irange(0xa4, 8, 0x148), Register32
-        REQ_ADDR2 = irange(0xa8, 8, 0x148), Register32
+So far described a single TD. 
+A full neural network, or a slightly complex one like my
+matmul example from above, 
+often requires more than a single pass. 
+Multiple tasks are chained as a 
+linear linked-list of tasks [6], denoted a *task sequence* (TS). 
+TS thus represents the complete neural network in a 
+format executable by the neural processor circuit [1]. 
+Example TS buffer for batched matmuls: 
 
-        BAR2 = (irange(0xac, 8, 0x148), irange(0x0, 0x20, 4)), Register32
-        REQ_NID2  = irange(0x12c, 8, 0x148), Register32
-        REQ_SIZE1 = irange(0x130, 8, 0x148), Register32
-        REQ_ADDR1 = irange(0x134, 8, 0x148), Register32
+    00004000: 00000000 009c0000 00000400 00000000  ................ start of TD 0
+    00004010: 00000068 00000000 30009800 00000300  h..........0....
+    00004020: 02824026 00000000 f401f800 00000000  &@.............. kernel (f401f800)
+    00004030: 00000000 00000080 00000080 00000080  ................ ] stream of vals f4 times
+    00004040: 00000080 00000080 00000080 00000080  ................ 
+    00004050: 00000080 00000080 00000080 00000080  ................
+    00004060: 00000080 00000080 00000080 00000080  ................
+    00004070: 00000080 00000000 00000000 00000000  ................ 
+    000040b0: 00000000 00000040 00000040 00000040  ....@...@...@...
+    000040c0: 00000040 00000040 00000040 00000040  @...@...@...@... ] stuff like kernel size
+    000040d0: 00000040 00000040 00000040 00000040  @...@...@...@... ] is encoded here
+    000040e0: 00000040 00000040 00000040 00000040  @...@...@...@...
+    000040f0: 00000040 00000080 00000080 00000080  @...............
+    00004100: 00000080 00000000 00000000 00000000  ................
+    00004120: 00000000 3c000000 00030004 00000001  .......<........ common (3c000000)
+    00004130: 00000022 00000002 00000002 00030004  "...............
+    00004140: 00000001 5000a021 00002041 00014003  ....!..PA ...@..
+    00004150: 00000003 00000000 00000000 04091101  ................
+    00004160: 00100000 00000000 6c013800 00033881  .........8.l.8.. src (6c013800)
+    00004170: 00008880 00000000 00000040 000000c0  ........@.......
+    00004180: 00000180 00000180 00000000 00000000  ................
+    000041a0: 00000000 01002031 00000000 00000100  ....1 ..........
+    000041d0: 00000000 00000000 00000000 44004800  .............H.D l2 (44004800)
+    000041e0: 00000000 00500172 00000000 00000010  ....r.P.........
+    000041f0: 00000020 00000020 00000020 00000000   ... ... .......
+    00004210: 0050017a 00000060 00000000 00000000  z.P.`...........
+    00004220: 00000000 00000000 0c008800 00000000  ................ neural (0c008800)
+    00004230: 00000000 00000000 00000000 1000c800  ................ planar (1000c800)
+    00004240: 00000082 00101c0c 00000000 00000000  ................
+    00004250: 00003c00 18017800 040000c1 00000180  .<...x.......... dst (18017800)
+    00004260: 00000040 000000c0 00000300 00000300  @...............
+    00004270: 01302031 00000000 00000000 00000000  1 0.............
+    00004300: 03000001 00000000 00000422 00000000  ........"....... next TD @ roundup 0x100
+    00004310: 0000006a 00000000 30009800 00000000  j..........0....
+    00004320: 02024025 00000000 f401f800 00000000  %@.............. kernel, again (f401f800)
+    00004330: 00000000 00000080 00000080 00000080  ................
 
 
-To execute a queue from the pool of 8, three registers at the top of 
-the TM regs are written with the request & queue_id values. 
-This will actually trigger the circuit to push the request.
-TM is supposed to do fancy scheduling & arbitering stuff with the TQ's and 
-priority parameters (e.g. async execution / data dependence stuff),
-but that stuff is rarely used. 
+You might have heard some people talking about a ".hwx" file.
+This is that. However, information I've come across have
+been incorrect and lacking research. 
+So I would not trust / use it, if any.
 
 
-The enqueueing of a TQ and the writes to the "execution" regs are 
-technically the job of the ASC firmware. 
-However, I quickly figured out the 10-ish necessary writes and 
-decided to do them myself. 
-So currently asc is just being ignored. Fw's not even mapped.
+
+## DMA
+
+Change of pace from phys addrs to virtual addrs now.
+Thankfully, ANE does not use some crazy memory management unit.
+It uses DART practically out-of-the-box. 
+Anything DMA exclusively uses *DART-translated virtual addresses*, 
+which is fully controlled by the kernel-side;
+addresses are discussed in depth in the Task Manager section.
+There are 3 DMA circuits for IO between sysmem-hardware, 
+each responsible for a specific buffer type:
 
 
-## FIFO
+**1) Kernel Fetcher**:
+Kernel DMA is a read circuit that fetches kernel
+information from system memory and sends kernel information
+to each of the N neural engines [5]; 
+Note that kernel is never sent back (read-only).
+The kernel fetcher is coupled to a "kernel extract circuit"
+which does LUT resolution iff the kernel is 
+compressed [5], but I haven't got to that yet. 
+For normal cases, it just memcpy's it to the kernel L2 space. 
+Can be 0 <= x <= 0x10000 (range ceil) 8-aligned size,
+opposed to a *tile* discussed now:
 
-TODO
+
+**2) Tile Fetcher**:
+Includes a 1) read circuit that receives a
+portion (e.g., tile) of the input data from
+[system memory], for storing in data buffer (L2),
+and a write circuit that forwards data from data buffer (L2)
+to a target (e.g. system memory) [5]. 
+Note: operates on the basis of tiles, 
+so must be aligned to the tile size (0x4000).
+Also a "normal" DMA circuit in that it just memcpy's 
+to the L2 tile region. 
 
 
-## TODO
+**3) TD Fetcher**:
+We are slowly approaching the final boss of *Task Manager*,
+which is an essay on its own, so lots of stuff is emitted.
+Important to remember: configuration registers 
+(both MADD (0x26bc04000 - 0x26bc20000) and DMA (0x26bc20000 - 0x26bc24000))
+are ***never ever*** touched directly. 
+That would be both expensive and error-prone. 
+Instead, the TD fetcher handles it for us. 
 
-- see what happens if unmapped addr is placed in BAR
-- pattern for kmem overwrites
+The TD fetcher is responsible for transferring
+the TD from sysmem to hardware, just like the above two.
+However, remember the TD codes? 
+Or notice how the tiny TD buffer is 
+supposedly responsible for configuring a space 200x its size?
+This transfer isn't just a memcpy, but a pretty 
+complex read + parse + broadcast. 
+Beyond parsing of the 7 fields, which is a task (pun) on its own,
+TD encodes many more special broadcasts/repeats/exceptions;
+for example, the "common" field has "offset" of 0x0000, which 
+is inaccessible; instead, there's a rule that it gets 
+copied to -0x800 before each of the other 6 fields 
+(hence the name common and why those offsets all end in 0x800).
+
+In reality, you don't need to know any of this 
+as all the complexity is abstracted by the TD fetcher.
+But why do I know this? -- I reversed the entire TD broadcasting 
+and was doing "writes" myself before realizing it wasn't me doing the work. 
+I commented out a wrong line and still saw the config range somehow fill up, 
+thought I was going insane, even ended up doing a fresh os install. 
+Replaced a BAR addr with 0x1234567, and 
+saw it "magically" broadcast to my reversed locations.
+Figured out BAR within the next hour and everything started to make sense.
+Outsmarted by a circuit...
+
+
+
+## Task Manager
+
+> Neural task manager manages the overall
+> operation of neural processor circuit. 
+> Neural task manager may receive a task list 
+> from a compiler executed by CPU, store tasks in its task queues, 
+> choose a task to perform, and send task commands to 
+> other components of the neural processor circuit 
+> for performing the chosen task [1]
+
+Task Manager operates on its 8 children task queues (TQ). See FIG 10 of [1].
+Each TQ is a hardware slot of 0x148 width;
+0x148\*8\*4 + 0x25000 (tq base) = 0x27900, stops right before restricted 
+area of 0x28000. Each TQ encapsulates a single TS. 
+Actions discussed above (DMA fetch, push through MADD)
+are initiated when the Task Manager selects (arbiters)
+one of the queues into the main queue. Basically, a "waiting room".
+Each TQ includes a (1) header, which includes fields like status (in use?), 
+priority, free slot count, etc, general information for the queue itself,
+and (2) BAR:
+
+
+### BAR
+
+Base Address Resolution. TD fetcher will make sense now.
+Of the many config regs, there are ones for IO. 
+When the compiler (fully CPU btw) "allocates" to L2, 
+it just fills out the "Yes, there's a buffer to fetch" field. 
+Registers indicating buffer addresses, e.g. 
+the output tile address register somewhere
+in the "dst" range, are zeroed at compilation. 
+The runtime-determined dva's must head to that register
+somehow though -- instead of manually operating on addrs, 
+apple nicely hooked a circuit that does it for us.
+
+BAR is a FIFO hardware for storing of up to 0x20 virtual addresses. 
+When a queue is selected to the main queue (by writing
+a val generated from a function of queue_id into the main reg), 
+DMA fetchers are signalled to fetch necessary input from that queue_id
+before anything else (duh). The first is always TD fetcher; 
+TD contains information on the other inputs, so it's always first. 
+TD fetcher fetches from the 
+vaddr stored in index 0 of the BAR of the selected queue. 
+It then broadcasts the first TD of the fetched TS across the config regs.
+Using that information (e.g. there is a kernel, no intermediate, and 2 src tiles)
+and with dvas 1-by-1 indexed (and dequeued) from the remaining BAR table, 
+1) writes the dva to their appropriate config reg and 
+2) inits the appropriate DMA circuit to fetch from that dva into L2. 
+
+Hence BAR has a specific order (td_ptr->krn_ptr->src1_ptr, etc.). 
+TD Fetcher even calculates (and writes) the 
+necessary offsetted addrs (e.g. kernel next addr after shifting) and does the addr arithmetic + writes too. 
+All it takes is BAR order to not be f'ed up 
+to make dynamic buffer allocs a lot less painless.
+A very unique and nice feature IMO.
+
+
+
+## ASC
+
+The enqueueing of a TQ and the selection to the main queue 
+are technically the asc's job. 
+Under macos the engine regs are not touched by CPU. 
+I can reliably boot the core to RVBAR, but I had major 
+issues talking with the firmware after it booted. 
+Either my faulty init data or other processor dependency issues.
+However, so much of the heavy lifting is wired-in and
+and I decided it was quicker to figure out task manager
+before fighting the firmware any longer. 
+So currently, asc is just being ignored. The firmware's not even mapped.
+I could turn on the core, leave it at the half-init state (or not)
+and it would not affect the experiments. 
 
 
 
@@ -386,10 +473,10 @@ TODO
 
 [2] [SCALABLE NEURAL NETWORK PROCESSING ENGINE](https://patentimages.storage.googleapis.com/09/94/b0/33e4247e137a73/US20220237438A1.pdf)
 
-[3] ) DYNAMICALLY SHAPING AND
-SEGMENTING WORK UNITS FOR
-PROCESSING IN NEURAL NETWORK
-PROCESSOR
+[3] [DYNAMICALLY SHAPING AND SEGMENTING WORK UNITS FOR PROCESSING IN NEURAL NETWORK PROCESSOR](https://patentimages.storage.googleapis.com/a4/83/a8/ad9d221cb7f8d8/US20190340498A1.pdf)
 
+[4] [PERFORMING MULTIPLY AND ACCUMULATE OPERATIONS IN NEURAL NETWORK PROCESSOR](https://patentimages.storage.googleapis.com/b9/db/be/52e7a45d4cafd5/US20190340486A1.pdf)
 
-[4] https://patentimages.storage.googleapis.com/b9/db/be/52e7a45d4cafd5/US20190340486A1.pdf
+[5] [COMPILING AND SCHEDULING TRANSACTIONS IN NEURAL NETWORK PROCESSOR](https://patentimages.storage.googleapis.com/42/7a/1f/099ed131b235f8/US11340936.pdf)
+
+[6] [SYSTEMS AND METHODS FOR TASK SWITCHING IN NEURAL NETWORK PROCESSOR](https://patentimages.storage.googleapis.com/f5/fd/4b/ba09d9f878657f/US20190340014A1.pdf)

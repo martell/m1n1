@@ -101,7 +101,7 @@ class TaskManager:
         self.regs.REQ_PUSH.val = self.tq_prty[queue_id] | (queue_id & 7) << 8
 
         assert (self.get_tm_status() == True)
-        self.get_committed_info()
+        # self.get_committed_info()
         self.handle_irq()
         self.tq.STATUS[queue_id].val = 0x0  # done
         return 0

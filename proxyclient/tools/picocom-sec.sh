@@ -7,6 +7,8 @@ DEFAULT_SECDEV=/dev/m1n1-sec
 PLATFORM_NAME=$(uname)
 
 case "${PLATFORM_NAME}" in
+Linux)
+    SECDEV=/dev/ttyACM1 ;;
 Darwin)
     SECDEV=/dev/cu.usbmodemP_03 ;;
 *)

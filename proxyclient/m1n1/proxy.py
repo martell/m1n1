@@ -133,6 +133,8 @@ class UartInterface(Reloadable):
 
     DEFAULT_UART_DEV="/dev/m1n1"
     DEFAULT_BAUD_RATE="115200"
+    if platform.system() == 'Linux':
+        DEFAULT_UART_DEV="/dev/ttyACM0"
     if platform.system() == 'Darwin':
         DEFAULT_UART_DEV="/dev/cu.usbmodemP_01"
 
